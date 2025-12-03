@@ -18,6 +18,7 @@ class WorkerAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "role")
+    list_display = ("user", "role", "telefon")  # Adăugat telefon în lista afișată
     list_filter = ("role",)
+    search_fields = ("user__username", "telefon")  # Poți căuta după username sau telefon
 

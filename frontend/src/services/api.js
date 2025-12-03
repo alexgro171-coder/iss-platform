@@ -1,0 +1,169 @@
+import axios from 'axios'
+
+// Configurare API
+const API_BASE_URL = '/api'
+
+// Crează instanța axios
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Interceptor pentru a adăuga token-ul JWT la fiecare cerere
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Interceptor pentru a gestiona răspunsurile și erorile
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config
+
+    // Dacă primim 401 și nu am încercat deja refresh
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
+
+      try {
+        const refreshToken = localStorage.getItem('refresh_token')
+        if (refreshToken) {
+          // Încercăm să reîmprospătăm token-ul
+          const response = await axios.post(`${API_BASE_URL}/token/refresh/`, {
+            refresh: refreshToken,
+          })
+
+          const { access } = response.data
+          localStorage.setItem('access_token', access)
+
+          // Reîncercăm cererea originală
+          originalRequest.headers.Authorization = `Bearer ${access}`
+          return api(originalRequest)
+        }
+      } catch (refreshError) {
+        // Refresh a eșuat - delogăm utilizatorul
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        window.location.href = '/login'
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
+
+// ============================================
+// AUTH API
+// ============================================
+
+export const authAPI = {
+  // Login - obține token-uri JWT
+  login: async (username, password) => {
+    const response = await axios.post(`${API_BASE_URL}/token/`, {
+      username,
+      password,
+    })
+    return response.data
+  },
+
+  // Obține informațiile utilizatorului curent
+  getCurrentUser: async () => {
+    const response = await api.get('/me/')
+    return response.data
+  },
+
+  // Refresh token
+  refreshToken: async (refreshToken) => {
+    const response = await axios.post(`${API_BASE_URL}/token/refresh/`, {
+      refresh: refreshToken,
+    })
+    return response.data
+  },
+}
+
+// ============================================
+// WORKERS API
+// ============================================
+
+export const workersAPI = {
+  // Listare cu filtre
+  getAll: async (filters = {}) => {
+    const params = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.append(key, value)
+    })
+    const response = await api.get(`/workers/?${params}`)
+    return response.data
+  },
+
+  // Obține un lucrător
+  getById: async (id) => {
+    const response = await api.get(`/workers/${id}/`)
+    return response.data
+  },
+
+  // Crează lucrător nou
+  create: async (data) => {
+    const response = await api.post('/workers/', data)
+    return response.data
+  },
+
+  // Actualizează lucrător
+  update: async (id, data) => {
+    const response = await api.patch(`/workers/${id}/`, data)
+    return response.data
+  },
+
+  // Șterge lucrător
+  delete: async (id) => {
+    await api.delete(`/workers/${id}/`)
+  },
+}
+
+// ============================================
+// CLIENTS API
+// ============================================
+
+export const clientsAPI = {
+  // Listare toți clienții
+  getAll: async () => {
+    const response = await api.get('/clients/')
+    return response.data
+  },
+
+  // Obține un client
+  getById: async (id) => {
+    const response = await api.get(`/clients/${id}/`)
+    return response.data
+  },
+
+  // Crează client nou
+  create: async (data) => {
+    const response = await api.post('/clients/', data)
+    return response.data
+  },
+
+  // Actualizează client
+  update: async (id, data) => {
+    const response = await api.patch(`/clients/${id}/`, data)
+    return response.data
+  },
+
+  // Șterge client
+  delete: async (id) => {
+    await api.delete(`/clients/${id}/`)
+  },
+}
+
+export default api
+

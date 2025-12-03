@@ -49,6 +49,8 @@ INSTALLED_APPS = [
 
     # Third-party
     "rest_framework",
+    "rest_framework_simplejwt",  # JWT Authentication
+    "corsheaders",  # CORS pentru frontend
 
     # Apps interne
     "iss",
@@ -56,6 +58,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS - trebuie să fie înainte de CommonMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -63,6 +66,14 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# CORS Configuration - permite frontend-ul să comunice cu backend-ul
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'core.urls'
 
@@ -124,9 +135,33 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",  # JWT ca metodă principală
+        "rest_framework.authentication.SessionAuthentication",  # Păstrăm pentru Django Admin
     ],
+}
+
+# Configurare JWT
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    # Token-ul de acces expiră în 1 oră
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    
+    # Token-ul de refresh expiră în 7 zile
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    
+    # Regenerează token-ul de refresh la fiecare folosire
+    "ROTATE_REFRESH_TOKENS": True,
+    
+    # Invalidează token-ul vechi după rotație
+    "BLACKLIST_AFTER_ROTATION": True,
+    
+    # Tipul token-ului în header
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    
+    # Câmpuri incluse în token
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }
 
 # Internationalization

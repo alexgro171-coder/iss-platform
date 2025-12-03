@@ -1,8 +1,23 @@
 from django.utils.dateparse import parse_date
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
 
 from .models import Client, Worker, UserProfile, UserRole
-from .serializers import ClientSerializer, WorkerSerializer
+from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def current_user(request):
+    """
+    Returnează informațiile utilizatorului curent.
+    Endpoint: GET /api/me/
+    
+    Folosit de frontend pentru a afișa datele utilizatorului logat.
+    """
+    serializer = CurrentUserSerializer(request.user)
+    return Response(serializer.data)
 
 
 class IsManagementOrReadOnly(permissions.BasePermission):
@@ -26,6 +41,39 @@ class IsManagementOrReadOnly(permissions.BasePermission):
         return role in (UserRole.MANAGEMENT, UserRole.ADMIN)
 
 
+class AgentCannotDelete(permissions.BasePermission):
+    """
+    Interzice ștergerea (DELETE) pentru utilizatorii cu rol Agent.
+    
+    Conform specificațiilor:
+    - Agent: "Nu poate șterge înregistrări"
+    
+    Permite toate celelalte operațiuni (GET, POST, PUT, PATCH).
+    """
+
+    def has_permission(self, request, view):
+        # Utilizatorul trebuie să fie autentificat
+        if not request.user.is_authenticated:
+            return False
+
+        # Dacă NU este o cerere DELETE, permitem
+        if request.method != "DELETE":
+            return True
+
+        # Este DELETE - verificăm rolul
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+
+        # Agentul NU poate șterge
+        if role == UserRole.AGENT:
+            return False
+
+        # Expert, Management, Admin pot șterge
+        return True
+
+
 class ClientViewSet(viewsets.ModelViewSet):
     """
     CRUD pentru clienți.
@@ -41,10 +89,12 @@ class WorkerViewSet(viewsets.ModelViewSet):
     """
     CRUD pentru lucrători, cu filtrare și reguli de acces:
     - Agent -> vede doar lucrătorii unde agent = user
-    - Expert/Management/Admin -> văd tot
+    - Agent -> NU poate șterge (DELETE interzis)
+    - Expert/Management/Admin -> văd tot și pot șterge
     """
 
     serializer_class = WorkerSerializer
+    permission_classes = [AgentCannotDelete]  # Aplică restricția de ștergere
 
     def get_queryset(self):
         user = self.request.user
@@ -86,6 +136,16 @@ class WorkerViewSet(viewsets.ModelViewSet):
         client_id = params.get("client_id")
         if client_id:
             qs = qs.filter(client_id=client_id)
+
+        # Filtru după cod COR (cod ocupațional)
+        cod_cor = params.get("cod_cor")
+        if cod_cor:
+            qs = qs.filter(cod_cor__icontains=cod_cor)
+
+        # Filtru după județ WP (Work Permit)
+        judet_wp = params.get("judet_wp")
+        if judet_wp:
+            qs = qs.filter(judet_wp__iexact=judet_wp)
 
         # interval data_introducere
         data_start = params.get("data_start")
