@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-// Configurare API
+// Configurare API - funcționează atât local cât și în producție
+// În producție, Nginx face proxy de la /api la backend
 const API_BASE_URL = '/api'
 
 // Crează instanța axios
