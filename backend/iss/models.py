@@ -1,0 +1,142 @@
+from django.db import models
+from django.contrib.auth.models import User
+
+
+class UserRole(models.TextChoices):
+    AGENT = "Agent", "Agent"
+    EXPERT = "Expert", "Expert"
+    MANAGEMENT = "Management", "Management"
+    ADMIN = "Admin", "Admin"
+
+
+class UserProfile(models.Model):
+    """
+    Profil pentru utilizatorii existenți (User),
+    în care stocăm rolul: Agent / Expert / Management / Admin.
+    """
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    role = models.CharField(max_length=20, choices=UserRole.choices, default=UserRole.AGENT)
+
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
+
+
+class Client(models.Model):
+    denumire = models.CharField(max_length=255)
+    tara = models.CharField(max_length=50, blank=True)
+    oras = models.CharField(max_length=50, blank=True)
+    judet = models.CharField(max_length=50, blank=True)
+    adresa = models.CharField(max_length=255, blank=True)
+    cod_fiscal = models.CharField(max_length=50, blank=True)
+
+    tarif_orar = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    nr_ore_minim = models.IntegerField(default=0)
+
+    cazare_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    masa_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    transport_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def __str__(self):
+        return self.denumire
+
+
+class WorkerStatus(models.TextChoices):
+    AVIZ_SOLICITAT = "Aviz solicitat", "Aviz solicitat"
+    AVIZ_EMIS = "Aviz emis", "Aviz emis"
+    VIZA_SOLICITATA = "Viza solicitata", "Viza solicitată"
+    VIZA_OBTINUTA = "Viza obtinuta", "Viza obținută"
+    VIZA_RESPINSA = "Viza respinsa", "Viza respinsă"
+    VIZA_REDEPUSA = "Viza redepusa", "Viza redepusă"
+    CANDIDAT_RETRAS = "Candidat retras", "Candidat retras"
+    SOSIT_CU_CIM = "Sosit cu CIM semnat", "Sosit cu CIM semnat"
+    PS_SOLICITAT = "Permis de sedere solicitat", "Permis de ședere solicitat"
+    PS_EMIS = "Permis de sedere emis", "Permis de ședere emis"
+    ACTIV = "Activ", "Activ"
+    SUSPENDAT = "Suspendat", "Suspendat"
+    INACTIV = "Inactiv", "Inactiv"
+
+
+class Worker(models.Model):
+    # Date personale
+    nume = models.CharField(max_length=50)
+    prenume = models.CharField(max_length=50)
+    cetatenie = models.CharField(max_length=50, blank=True)
+    stare_civila = models.CharField(
+        max_length=2,
+        choices=[("M", "M"), ("NM", "NM")],
+        blank=True,
+    )
+    copii_intretinere = models.SmallIntegerField(default=0)
+    sex = models.CharField(
+        max_length=1,
+        choices=[("M", "M"), ("F", "F")],
+        blank=True,
+    )
+    data_nasterii = models.DateField(null=True, blank=True)
+
+    # Pașaport
+    pasaport_nr = models.CharField(max_length=20, unique=True)
+    data_emitere_pass = models.DateField(null=True, blank=True)
+    data_exp_pass = models.DateField(null=True, blank=True)
+
+    oras_domiciliu = models.CharField(max_length=100, blank=True)
+
+    # Meta
+    data_introducere = models.DateTimeField(auto_now_add=True)
+    cod_cor = models.CharField(max_length=10, blank=True)
+
+    # Agentul care a introdus candidatul
+    agent = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workers_introdusi",
+    )
+
+    # WP / IGI
+    dosar_wp_nr = models.CharField(max_length=50, blank=True)
+    data_solicitare_wp = models.DateField(null=True, blank=True)
+    data_programare_wp = models.DateField(null=True, blank=True)
+    judet_wp = models.CharField(max_length=50, blank=True)
+
+    # Viză
+    data_solicitare_viza = models.DateField(null=True, blank=True)
+    data_programare_interviu = models.DateField(null=True, blank=True)
+
+    status = models.CharField(
+        max_length=40,
+        choices=WorkerStatus.choices,
+        default=WorkerStatus.AVIZ_SOLICITAT,
+    )
+
+    # Permis de ședere
+    data_depunere_ps = models.DateField(null=True, blank=True)
+    data_programare_ps = models.DateField(null=True, blank=True)
+
+    # După sosire în RO
+    cnp = models.CharField(max_length=13, blank=True)
+    data_intrare_ro = models.DateField(null=True, blank=True)
+    cim_nr = models.CharField(max_length=50, blank=True)
+    data_emitere_cim = models.DateField(null=True, blank=True)
+    data_emitere_ps = models.DateField(null=True, blank=True)
+    data_expirare_ps = models.DateField(null=True, blank=True)
+    adresa_ro = models.CharField(max_length=255, blank=True)
+
+    client = models.ForeignKey(
+        Client,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workers",
+    )
+
+    observatii = models.TextField(blank=True)
+
+    # Path către folderul de documente (vom lega ulterior la storage S3/MinIO)
+    folder_doc = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.nume} {self.prenume} ({self.pasaport_nr})"
+

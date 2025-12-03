@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+cat > .gitignore << 'EOF'
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+# Virtual env
+.venv/
+
+# Node
+node_modules/
+.next/
+
+# Mac
+.DS_Store
+
+# Docker
+*.log
+.env
