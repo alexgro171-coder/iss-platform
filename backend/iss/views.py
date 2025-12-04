@@ -275,8 +275,31 @@ class WorkerViewSet(viewsets.ModelViewSet):
             wb = openpyxl.load_workbook(file)
             ws = wb.active
 
-            # Obținem header-urile
-            headers = [cell.value for cell in ws[1] if cell.value]
+            # Obținem header-urile și le normalizăm (lowercase, fără spații)
+            raw_headers = [cell.value for cell in ws[1]]
+            headers = []
+            for h in raw_headers:
+                if h:
+                    # Normalizăm: lowercase, strip, înlocuim spații cu underscore
+                    normalized = str(h).lower().strip().replace(' ', '_').replace('.', '')
+                    # Mapări pentru variante comune
+                    header_map = {
+                        'nr_pasaport': 'pasaport_nr',
+                        'numar_pasaport': 'pasaport_nr',
+                        'passport': 'pasaport_nr',
+                        'passport_nr': 'pasaport_nr',
+                        'first_name': 'prenume',
+                        'last_name': 'nume',
+                        'family_name': 'nume',
+                        'given_name': 'prenume',
+                        'nationality': 'cetatenie',
+                        'citizenship': 'cetatenie',
+                        'birth_date': 'data_nasterii',
+                        'date_of_birth': 'data_nasterii',
+                    }
+                    headers.append(header_map.get(normalized, normalized))
+                else:
+                    headers.append(None)
             
             results = {
                 'total': 0,
@@ -287,22 +310,40 @@ class WorkerViewSet(viewsets.ModelViewSet):
 
             # Procesăm fiecare rând (începând de la 2 pentru a sări header-ul)
             for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                # Skip rânduri complet goale
+                if not any(row):
+                    continue
+                    
                 results['total'] += 1
                 
                 # Creăm dict cu datele
                 row_data = {}
                 for col_idx, value in enumerate(row):
-                    if col_idx < len(headers) and value is not None:
+                    if col_idx < len(headers) and headers[col_idx] and value is not None:
+                        # Convertim valoarea la string dacă e necesar și curățăm
                         row_data[headers[col_idx]] = value
 
-                # Skip rânduri goale
-                if not row_data or not row_data.get('nume') or not row_data.get('pasaport_nr'):
-                    if row_data:  # Dacă are date dar lipsesc câmpuri obligatorii
+                # Verificăm câmpurile obligatorii
+                nume = row_data.get('nume')
+                prenume = row_data.get('prenume')
+                pasaport = row_data.get('pasaport_nr')
+                
+                # Skip rânduri fără date obligatorii
+                if not nume or not pasaport:
+                    # Dacă are alte date dar lipsesc câmpuri obligatorii
+                    if any(v for v in row_data.values() if v):
                         results['errors'] += 1
+                        missing = []
+                        if not nume:
+                            missing.append('nume')
+                        if not prenume:
+                            missing.append('prenume')
+                        if not pasaport:
+                            missing.append('pasaport_nr')
                         results['details'].append({
                             'row': row_idx,
                             'status': 'error',
-                            'message': 'Lipsesc câmpuri obligatorii (nume, prenume, pasaport_nr)'
+                            'message': f'Lipsesc câmpuri obligatorii: {", ".join(missing)}'
                         })
                     continue
 
