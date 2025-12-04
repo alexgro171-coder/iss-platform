@@ -63,13 +63,32 @@ function WorkerForm() {
       // Dacă editează, încarcă datele lucrătorului
       if (isEditing) {
         const worker = await workersAPI.getById(id)
+        console.log('Worker data received:', worker)
         setFormData({
           ...worker,
           client: worker.client || '',
+          // Asigură-te că valorile null devin stringuri goale pentru input-uri
+          nume: worker.nume || '',
+          prenume: worker.prenume || '',
+          cetatenie: worker.cetatenie || '',
+          stare_civila: worker.stare_civila || '',
+          sex: worker.sex || '',
+          pasaport_nr: worker.pasaport_nr || '',
+          oras_domiciliu: worker.oras_domiciliu || '',
+          cod_cor: worker.cod_cor || '',
+          dosar_wp_nr: worker.dosar_wp_nr || '',
+          judet_wp: worker.judet_wp || '',
+          cnp: worker.cnp || '',
+          cim_nr: worker.cim_nr || '',
+          adresa_ro: worker.adresa_ro || '',
+          observatii: worker.observatii || '',
+          copii_intretinere: worker.copii_intretinere || 0,
+          status: worker.status || 'Aviz solicitat',
         })
       }
     } catch (error) {
-      setError('Eroare la încărcarea datelor')
+      console.error('Error loading worker:', error)
+      setError(`Eroare la încărcarea datelor: ${error.response?.data?.detail || error.message}`)
     } finally {
       setLoading(false)
     }
