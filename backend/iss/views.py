@@ -280,26 +280,58 @@ class WorkerViewSet(viewsets.ModelViewSet):
             headers = []
             for h in raw_headers:
                 if h:
-                    # Normalizăm: lowercase, strip, înlocuim spații cu underscore
-                    normalized = str(h).lower().strip().replace(' ', '_').replace('.', '')
-                    # Mapări pentru variante comune
+                    # Normalizăm: lowercase, strip, înlocuim spații cu underscore, eliminăm puncte și caractere speciale
+                    normalized = str(h).lower().strip()
+                    # Eliminăm puncte, virgule și alte caractere
+                    normalized = normalized.replace('.', '').replace(',', '').replace(':', '')
+                    # Înlocuim spații multiple cu unul singur, apoi cu underscore
+                    import re
+                    normalized = re.sub(r'\s+', '_', normalized)
+                    # Eliminăm underscore-uri la început și sfârșit
+                    normalized = normalized.strip('_')
+                    
+                    # Mapări pentru variante comune (inclusiv în română)
                     header_map = {
+                        # Pașaport
                         'nr_pasaport': 'pasaport_nr',
                         'numar_pasaport': 'pasaport_nr',
+                        'pasaport': 'pasaport_nr',
                         'passport': 'pasaport_nr',
                         'passport_nr': 'pasaport_nr',
+                        'passport_number': 'pasaport_nr',
+                        'nr_pașaport': 'pasaport_nr',
+                        'număr_pașaport': 'pasaport_nr',
+                        'pașaport_nr': 'pasaport_nr',
+                        'pașaport': 'pasaport_nr',
+                        # Nume/Prenume
                         'first_name': 'prenume',
                         'last_name': 'nume',
                         'family_name': 'nume',
                         'given_name': 'prenume',
+                        'name': 'nume',
+                        'surname': 'nume',
+                        'forename': 'prenume',
+                        # Cetățenie
                         'nationality': 'cetatenie',
                         'citizenship': 'cetatenie',
+                        'cetățenie': 'cetatenie',
+                        # Date
                         'birth_date': 'data_nasterii',
                         'date_of_birth': 'data_nasterii',
+                        'data_nașterii': 'data_nasterii',
+                        # Altele
+                        'oraș_domiciliu': 'oras_domiciliu',
+                        'stare_civilă': 'stare_civila',
+                        'copii_întreținere': 'copii_intretinere',
+                        'județ_wp': 'judet_wp',
+                        'observații': 'observatii',
                     }
                     headers.append(header_map.get(normalized, normalized))
                 else:
                     headers.append(None)
+            
+            # Debug: returnăm headers detectate dacă nu avem datele corecte
+            detected_headers = [h for h in headers if h]
             
             results = {
                 'total': 0,
@@ -340,10 +372,16 @@ class WorkerViewSet(viewsets.ModelViewSet):
                             missing.append('prenume')
                         if not pasaport:
                             missing.append('pasaport_nr')
+                        
+                        # La primul rând cu eroare, adăugăm info despre headers detectate
+                        error_msg = f'Lipsesc câmpuri obligatorii: {", ".join(missing)}'
+                        if row_idx == 2 and detected_headers:
+                            error_msg += f' (Coloane detectate: {", ".join(detected_headers[:10])}...)'
+                        
                         results['details'].append({
                             'row': row_idx,
                             'status': 'error',
-                            'message': f'Lipsesc câmpuri obligatorii: {", ".join(missing)}'
+                            'message': error_msg
                         })
                     continue
 
