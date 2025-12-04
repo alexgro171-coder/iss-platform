@@ -21,3 +21,8 @@ node_modules/
 # Docker
 *.log
 .env
+
+# Django
+backend/media/
+backend/staticfiles/
+

@@ -63,6 +63,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'iss.middleware.CurrentRequestMiddleware',  # Pentru logging - face request-ul disponibil în signals
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -185,3 +186,20 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# =============================================================================
+# Email Configuration (pentru alerte)
+# =============================================================================
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # Pentru dezvoltare
+# Pentru producție, configurează SMTP:
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.example.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+
+DEFAULT_FROM_EMAIL = 'ISS Platform <noreply@issplatform.ro>'
+ALERT_EMAIL_SUBJECT_PREFIX = '[ISS Platform] '
+DEFAULT_ALERT_EMAIL = os.getenv('DEFAULT_ALERT_EMAIL', 'groseanu@gmail.com')

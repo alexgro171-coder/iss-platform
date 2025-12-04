@@ -1,6 +1,5 @@
 from django.db import models
 from django.contrib.auth.models import User
-import os
 
 
 def worker_document_path(instance, filename):
@@ -268,4 +267,49 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.timestamp} - {self.action} - {self.username}"
+
+    @classmethod
+    def log(cls, log_type, action, user=None, target=None, details=None, request=None):
+        """
+        Metodă helper pentru crearea rapidă a log-urilor.
+        
+        Args:
+            log_type: LogType (SYSTEM, AUTH, ACTIVITY)
+            action: LogAction (LOGIN, CREATE, UPDATE, etc.)
+            user: User object (opțional)
+            target: Obiectul țintă pentru acțiune (opțional)
+            details: Dict cu detalii suplimentare (opțional)
+            request: HTTP request pentru extragerea IP și user agent (opțional)
+        """
+        log_entry = cls(
+            log_type=log_type,
+            action=action,
+            details=details or {},
+        )
+        
+        # Setăm user-ul
+        if user:
+            log_entry.user = user
+            log_entry.username = user.username
+        
+        # Setăm target-ul (obiectul afectat)
+        if target:
+            log_entry.target_model = target.__class__.__name__
+            log_entry.target_id = target.pk
+            log_entry.target_repr = str(target)[:255]
+        
+        # Extragem info din request
+        if request:
+            # IP Address
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                log_entry.ip_address = x_forwarded_for.split(',')[0].strip()
+            else:
+                log_entry.ip_address = request.META.get('REMOTE_ADDR')
+            
+            # User Agent
+            log_entry.user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+        
+        log_entry.save()
+        return log_entry
 
