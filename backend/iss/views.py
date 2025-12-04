@@ -447,39 +447,46 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         except:
                             return 0
 
+                    # Helper pentru a obține string safe (evită "None")
+                    def get_str(key, default=''):
+                        val = row_data.get(key)
+                        if val is None:
+                            return default
+                        return str(val).strip()
+                    
                     # Creăm lucrătorul
                     worker = Worker.objects.create(
-                        nume=str(row_data.get('nume', '')).strip(),
-                        prenume=str(row_data.get('prenume', '')).strip(),
+                        nume=get_str('nume'),
+                        prenume=get_str('prenume'),
                         pasaport_nr=pasaport_nr,
-                        cetatenie=str(row_data.get('cetatenie', '')).strip(),
-                        stare_civila=str(row_data.get('stare_civila', '')).strip()[:2],
+                        cetatenie=get_str('cetatenie'),
+                        stare_civila=get_str('stare_civila')[:2] if get_str('stare_civila') else '',
                         copii_intretinere=parse_int_value(row_data.get('copii_intretinere')),
-                        sex=str(row_data.get('sex', '')).strip()[:1].upper(),
+                        sex=get_str('sex')[:1].upper() if get_str('sex') else '',
                         data_nasterii=parse_date_value(row_data.get('data_nasterii')),
-                        oras_domiciliu=str(row_data.get('oras_domiciliu', '')).strip(),
+                        oras_domiciliu=get_str('oras_domiciliu'),
                         data_emitere_pass=parse_date_value(row_data.get('data_emitere_pass')),
                         data_exp_pass=parse_date_value(row_data.get('data_exp_pass')),
-                        dosar_wp_nr=str(row_data.get('dosar_wp_nr', '')).strip(),
+                        dosar_wp_nr=get_str('dosar_wp_nr'),
                         data_solicitare_wp=parse_date_value(row_data.get('data_solicitare_wp')),
                         data_programare_wp=parse_date_value(row_data.get('data_programare_wp')),
-                        judet_wp=str(row_data.get('judet_wp', '')).strip(),
-                        cod_cor=str(row_data.get('cod_cor', '')).strip(),
+                        judet_wp=get_str('judet_wp'),
+                        cod_cor=get_str('cod_cor'),
                         data_solicitare_viza=parse_date_value(row_data.get('data_solicitare_viza')),
                         data_programare_interviu=parse_date_value(row_data.get('data_programare_interviu')),
-                        status=str(row_data.get('status', 'Aviz solicitat')).strip(),
-                        cnp=str(row_data.get('cnp', '')).strip(),
+                        status=get_str('status') or 'Aviz solicitat',
+                        cnp=get_str('cnp'),
                         data_intrare_ro=parse_date_value(row_data.get('data_intrare_ro')),
-                        cim_nr=str(row_data.get('cim_nr', '')).strip(),
+                        cim_nr=get_str('cim_nr'),
                         data_emitere_cim=parse_date_value(row_data.get('data_emitere_cim')),
                         data_depunere_ps=parse_date_value(row_data.get('data_depunere_ps')),
                         data_programare_ps=parse_date_value(row_data.get('data_programare_ps')),
                         data_emitere_ps=parse_date_value(row_data.get('data_emitere_ps')),
                         data_expirare_ps=parse_date_value(row_data.get('data_expirare_ps')),
-                        adresa_ro=str(row_data.get('adresa_ro', '')).strip(),
+                        adresa_ro=get_str('adresa_ro'),
                         client=client,
                         agent=request.user,  # Agentul care importă
-                        observatii=str(row_data.get('observatii', '')).strip(),
+                        observatii=get_str('observatii'),
                     )
 
                     results['success'] += 1
