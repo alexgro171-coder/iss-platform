@@ -1,9 +1,13 @@
 from django.utils.dateparse import parse_date
-from rest_framework import viewsets, permissions
-from rest_framework.decorators import api_view, permission_classes
+from django.http import HttpResponse
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
+from io import BytesIO
+import openpyxl
+from openpyxl import Workbook
 
-from .models import Client, Worker, UserProfile, UserRole
+from .models import Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction
 from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer
 
 
@@ -162,4 +166,252 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(data_introducere__date__lte=d_end)
 
         return qs.order_by("-data_introducere")
+
+    @action(detail=False, methods=['get'], url_path='bulk-template')
+    def bulk_template(self, request):
+        """
+        Descarcă template Excel pentru import bulk.
+        GET /api/workers/bulk-template/
+        """
+        # Creăm workbook-ul Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Lucrători"
+
+        # Header-uri (coloanele din template)
+        headers = [
+            'nume', 'prenume', 'pasaport_nr', 'cetatenie', 'stare_civila',
+            'copii_intretinere', 'sex', 'data_nasterii', 'oras_domiciliu',
+            'data_emitere_pass', 'data_exp_pass', 'dosar_wp_nr',
+            'data_solicitare_wp', 'data_programare_wp', 'judet_wp', 'cod_cor',
+            'data_solicitare_viza', 'data_programare_interviu', 'status',
+            'cnp', 'data_intrare_ro', 'cim_nr', 'data_emitere_cim',
+            'data_depunere_ps', 'data_programare_ps', 'data_emitere_ps',
+            'data_expirare_ps', 'adresa_ro', 'client_denumire', 'observatii'
+        ]
+
+        # Scriem header-urile
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = openpyxl.styles.Font(bold=True)
+            cell.fill = openpyxl.styles.PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+
+        # Adăugăm un rând exemplu
+        example_row = [
+            'Popescu', 'Ion', 'AB123456', 'Nepal', 'M',
+            0, 'M', '1990-01-15', 'Kathmandu',
+            '2023-01-01', '2033-01-01', 'WP-001',
+            '2024-01-01', '2024-02-01', 'București', '721401',
+            '2024-02-15', '2024-03-01', 'Aviz solicitat',
+            '', '', '', '',
+            '', '', '', '',
+            '', 'Client Exemplu', 'Observații exemplu'
+        ]
+        for col, value in enumerate(example_row, 1):
+            ws.cell(row=2, column=col, value=value)
+
+        # Ajustăm lățimea coloanelor
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 30)
+            ws.column_dimensions[column].width = adjusted_width
+
+        # Salvăm în memory buffer
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=template_import_lucratori.xlsx'
+        return response
+
+    @action(detail=False, methods=['post'], url_path='bulk-import')
+    def bulk_import(self, request):
+        """
+        Import bulk lucrători din fișier Excel.
+        POST /api/workers/bulk-import/
+        """
+        # Verificăm permisiunile (doar Management/Admin)
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+
+        if role not in (UserRole.MANAGEMENT, UserRole.ADMIN):
+            return Response(
+                {'detail': 'Nu aveți permisiunea de a importa lucrători.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Verificăm dacă avem fișier
+        if 'file' not in request.FILES:
+            return Response(
+                {'detail': 'Te rog încarcă un fișier Excel.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES['file']
+
+        # Verificăm extensia
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response(
+                {'detail': 'Fișierul trebuie să fie în format Excel (.xlsx sau .xls).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Citim fișierul Excel
+            wb = openpyxl.load_workbook(file)
+            ws = wb.active
+
+            # Obținem header-urile
+            headers = [cell.value for cell in ws[1] if cell.value]
+            
+            results = {
+                'total': 0,
+                'success': 0,
+                'errors': 0,
+                'details': []
+            }
+
+            # Procesăm fiecare rând (începând de la 2 pentru a sări header-ul)
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                results['total'] += 1
+                
+                # Creăm dict cu datele
+                row_data = {}
+                for col_idx, value in enumerate(row):
+                    if col_idx < len(headers) and value is not None:
+                        row_data[headers[col_idx]] = value
+
+                # Skip rânduri goale
+                if not row_data or not row_data.get('nume') or not row_data.get('pasaport_nr'):
+                    if row_data:  # Dacă are date dar lipsesc câmpuri obligatorii
+                        results['errors'] += 1
+                        results['details'].append({
+                            'row': row_idx,
+                            'status': 'error',
+                            'message': 'Lipsesc câmpuri obligatorii (nume, prenume, pasaport_nr)'
+                        })
+                    continue
+
+                try:
+                    # Verificăm dacă pașaportul există deja
+                    pasaport_nr = str(row_data.get('pasaport_nr', '')).strip()
+                    if Worker.objects.filter(pasaport_nr=pasaport_nr).exists():
+                        results['errors'] += 1
+                        results['details'].append({
+                            'row': row_idx,
+                            'status': 'error',
+                            'message': f'Pașaportul {pasaport_nr} există deja în baza de date'
+                        })
+                        continue
+
+                    # Găsim clientul dacă e specificat
+                    client = None
+                    client_denumire = row_data.get('client_denumire')
+                    if client_denumire:
+                        client = Client.objects.filter(denumire__iexact=str(client_denumire).strip()).first()
+
+                    # Procesăm datele
+                    def parse_date_value(value):
+                        if not value:
+                            return None
+                        if isinstance(value, str):
+                            return parse_date(value)
+                        # Dacă e datetime din Excel
+                        try:
+                            return value.date() if hasattr(value, 'date') else value
+                        except:
+                            return None
+
+                    def parse_int_value(value):
+                        try:
+                            return int(value) if value else 0
+                        except:
+                            return 0
+
+                    # Creăm lucrătorul
+                    worker = Worker.objects.create(
+                        nume=str(row_data.get('nume', '')).strip(),
+                        prenume=str(row_data.get('prenume', '')).strip(),
+                        pasaport_nr=pasaport_nr,
+                        cetatenie=str(row_data.get('cetatenie', '')).strip(),
+                        stare_civila=str(row_data.get('stare_civila', '')).strip()[:2],
+                        copii_intretinere=parse_int_value(row_data.get('copii_intretinere')),
+                        sex=str(row_data.get('sex', '')).strip()[:1].upper(),
+                        data_nasterii=parse_date_value(row_data.get('data_nasterii')),
+                        oras_domiciliu=str(row_data.get('oras_domiciliu', '')).strip(),
+                        data_emitere_pass=parse_date_value(row_data.get('data_emitere_pass')),
+                        data_exp_pass=parse_date_value(row_data.get('data_exp_pass')),
+                        dosar_wp_nr=str(row_data.get('dosar_wp_nr', '')).strip(),
+                        data_solicitare_wp=parse_date_value(row_data.get('data_solicitare_wp')),
+                        data_programare_wp=parse_date_value(row_data.get('data_programare_wp')),
+                        judet_wp=str(row_data.get('judet_wp', '')).strip(),
+                        cod_cor=str(row_data.get('cod_cor', '')).strip(),
+                        data_solicitare_viza=parse_date_value(row_data.get('data_solicitare_viza')),
+                        data_programare_interviu=parse_date_value(row_data.get('data_programare_interviu')),
+                        status=str(row_data.get('status', 'Aviz solicitat')).strip(),
+                        cnp=str(row_data.get('cnp', '')).strip(),
+                        data_intrare_ro=parse_date_value(row_data.get('data_intrare_ro')),
+                        cim_nr=str(row_data.get('cim_nr', '')).strip(),
+                        data_emitere_cim=parse_date_value(row_data.get('data_emitere_cim')),
+                        data_depunere_ps=parse_date_value(row_data.get('data_depunere_ps')),
+                        data_programare_ps=parse_date_value(row_data.get('data_programare_ps')),
+                        data_emitere_ps=parse_date_value(row_data.get('data_emitere_ps')),
+                        data_expirare_ps=parse_date_value(row_data.get('data_expirare_ps')),
+                        adresa_ro=str(row_data.get('adresa_ro', '')).strip(),
+                        client=client,
+                        agent=request.user,  # Agentul care importă
+                        observatii=str(row_data.get('observatii', '')).strip(),
+                    )
+
+                    results['success'] += 1
+                    results['details'].append({
+                        'row': row_idx,
+                        'status': 'success',
+                        'message': f'{worker.nume} {worker.prenume} importat cu succes'
+                    })
+
+                except Exception as e:
+                    results['errors'] += 1
+                    results['details'].append({
+                        'row': row_idx,
+                        'status': 'error',
+                        'message': str(e)
+                    })
+
+            # Logăm importul
+            ActivityLog.log(
+                log_type=LogType.ACTIVITY,
+                action=LogAction.BULK_IMPORT,
+                user=request.user,
+                details={
+                    'message': f'Import bulk: {results["success"]} succes, {results["errors"]} erori',
+                    'total': results['total'],
+                    'success': results['success'],
+                    'errors': results['errors'],
+                    'filename': file.name,
+                },
+                request=request
+            )
+
+            return Response(results)
+
+        except Exception as e:
+            return Response(
+                {'detail': f'Eroare la procesarea fișierului: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
