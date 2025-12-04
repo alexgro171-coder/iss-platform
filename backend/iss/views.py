@@ -363,7 +363,8 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 'total': 0,
                 'success': 0,
                 'errors': 0,
-                'details': []
+                'details': [],
+                'debug_headers': detected_headers[:15],  # Primele 15 headers pentru debug
             }
 
             # Procesăm fiecare rând (începând de la 2 pentru a sări header-ul)
@@ -377,9 +378,14 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 # Creăm dict cu datele
                 row_data = {}
                 for col_idx, value in enumerate(row):
-                    if col_idx < len(headers) and headers[col_idx] and value is not None:
-                        # Convertim valoarea la string dacă e necesar și curățăm
-                        row_data[headers[col_idx]] = value
+                    if col_idx < len(headers) and headers[col_idx]:
+                        # Acceptăm și valori care nu sunt None
+                        if value is not None and value != '':
+                            row_data[headers[col_idx]] = value
+                
+                # Debug: la primul rând, afișăm ce date am citit
+                if row_idx == 2 and 'debug_first_row' not in results:
+                    results['debug_first_row'] = {k: str(v)[:50] for k, v in list(row_data.items())[:10]}
 
                 # Verificăm câmpurile obligatorii
                 nume = row_data.get('nume')
@@ -490,10 +496,14 @@ class WorkerViewSet(viewsets.ModelViewSet):
                     )
 
                     results['success'] += 1
+                    # Afișăm datele salvate pentru verificare
+                    saved_info = f'{worker.nume} {worker.prenume}'
+                    if worker.cetatenie:
+                        saved_info += f', {worker.cetatenie}'
                     results['details'].append({
                         'row': row_idx,
                         'status': 'success',
-                        'message': f'{worker.nume} {worker.prenume} importat cu succes'
+                        'message': f'{saved_info} importat cu succes'
                     })
 
                 except Exception as e:
