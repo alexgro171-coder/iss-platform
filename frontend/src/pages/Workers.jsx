@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { workersAPI } from '../services/api'
+import { workersAPI, clientsAPI } from '../services/api'
 import './Workers.css'
 
 /**
@@ -16,12 +16,26 @@ function Workers() {
     cetatenie: '',
     pasaport_nr: '',
     cod_cor: '',
+    client_id: '',
+    luna_wp: '',
+    anul_wp: '',
   })
+  const [clients, setClients] = useState([])
 
-  // Încarcă lucrătorii la prima randare și când se schimbă filtrele
+  // Încarcă lucrătorii și clienții la prima randare
   useEffect(() => {
     loadWorkers()
+    loadClients()
   }, [])
+
+  const loadClients = async () => {
+    try {
+      const data = await clientsAPI.getAll()
+      setClients(data)
+    } catch (error) {
+      console.error('Error loading clients:', error)
+    }
+  }
 
   const loadWorkers = async () => {
     setLoading(true)
@@ -53,8 +67,36 @@ function Workers() {
       cetatenie: '',
       pasaport_nr: '',
       cod_cor: '',
+      client_id: '',
+      luna_wp: '',
+      anul_wp: '',
     })
   }
+
+  // Helper pentru formatare dată
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
+
+  // Generare ani pentru filtru
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i)
+  const months = [
+    { value: '1', label: 'Ianuarie' },
+    { value: '2', label: 'Februarie' },
+    { value: '3', label: 'Martie' },
+    { value: '4', label: 'Aprilie' },
+    { value: '5', label: 'Mai' },
+    { value: '6', label: 'Iunie' },
+    { value: '7', label: 'Iulie' },
+    { value: '8', label: 'August' },
+    { value: '9', label: 'Septembrie' },
+    { value: '10', label: 'Octombrie' },
+    { value: '11', label: 'Noiembrie' },
+    { value: '12', label: 'Decembrie' },
+  ]
 
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Sigur vrei să ștergi lucrătorul "${name}"?`)) {
@@ -110,9 +152,17 @@ function Workers() {
           <h1>Lucrători</h1>
           <p>{workers.length} înregistrări</p>
         </div>
-        <Link to="/workers/new" className="btn btn-primary">
-          + Adaugă Lucrător
-        </Link>
+        <div className="header-actions">
+          <button className="btn btn-secondary" onClick={() => alert('Export Excel - în dezvoltare')}>
+            📊 Export Excel
+          </button>
+          <button className="btn btn-secondary" onClick={() => alert('Export PDF - în dezvoltare')}>
+            📄 Export PDF
+          </button>
+          <Link to="/workers/new" className="btn btn-primary">
+            + Adaugă Lucrător
+          </Link>
+        </div>
       </header>
 
       {/* Filtre */}
@@ -164,6 +214,48 @@ function Workers() {
               placeholder="ex: 7214"
             />
           </div>
+
+          <div className="filter-group">
+            <label>Client</label>
+            <select 
+              name="client_id" 
+              value={filters.client_id} 
+              onChange={handleFilterChange}
+            >
+              <option value="">Toți clienții</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>{client.denumire}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Luna WP</label>
+            <select 
+              name="luna_wp" 
+              value={filters.luna_wp} 
+              onChange={handleFilterChange}
+            >
+              <option value="">Toate</option>
+              {months.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Anul WP</label>
+            <select 
+              name="anul_wp" 
+              value={filters.anul_wp} 
+              onChange={handleFilterChange}
+            >
+              <option value="">Toți anii</option>
+              {years.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="filters-actions">
@@ -193,6 +285,7 @@ function Workers() {
                   <th>Cetățenie</th>
                   <th>Cod COR</th>
                   <th>Client</th>
+                  <th>Data Prog. WP</th>
                   <th>Status</th>
                   <th>Acțiuni</th>
                 </tr>
@@ -209,6 +302,7 @@ function Workers() {
                     <td>{worker.cetatenie || '-'}</td>
                     <td className="mono">{worker.cod_cor || '-'}</td>
                     <td>{worker.client_denumire || '-'}</td>
+                    <td className="mono">{formatDate(worker.data_programare_wp)}</td>
                     <td>
                       <span className={`badge badge-${statusColors[worker.status] || 'info'}`}>
                         {worker.status}
