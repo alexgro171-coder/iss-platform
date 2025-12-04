@@ -278,31 +278,38 @@ class WorkerViewSet(viewsets.ModelViewSet):
             # Obținem header-urile și le normalizăm (lowercase, fără spații)
             raw_headers = [cell.value for cell in ws[1]]
             headers = []
+            import re
             for h in raw_headers:
                 if h:
-                    # Normalizăm: lowercase, strip, înlocuim spații cu underscore, eliminăm puncte și caractere speciale
+                    # Normalizăm: lowercase, strip
                     normalized = str(h).lower().strip()
-                    # Eliminăm puncte, virgule și alte caractere
-                    normalized = normalized.replace('.', '').replace(',', '').replace(':', '')
+                    # Eliminăm tot ce e în paranteze (ex: "(m/nm)", "(yyyy-mm-dd)")
+                    normalized = re.sub(r'\([^)]*\)', '', normalized)
+                    # Eliminăm asteriscuri și alte caractere speciale
+                    normalized = normalized.replace('*', '').replace('.', '').replace(',', '').replace(':', '')
                     # Înlocuim spații multiple cu unul singur, apoi cu underscore
-                    import re
                     normalized = re.sub(r'\s+', '_', normalized)
                     # Eliminăm underscore-uri la început și sfârșit
                     normalized = normalized.strip('_')
                     
-                    # Mapări pentru variante comune (inclusiv în română)
+                    # Mapări pentru variante comune (inclusiv în română cu diacritice)
                     header_map = {
-                        # Pașaport
+                        # Pașaport - toate variantele posibile
                         'nr_pasaport': 'pasaport_nr',
+                        'nr_pașaport': 'pasaport_nr',
                         'numar_pasaport': 'pasaport_nr',
+                        'număr_pașaport': 'pasaport_nr',
                         'pasaport': 'pasaport_nr',
+                        'pașaport': 'pasaport_nr',
                         'passport': 'pasaport_nr',
                         'passport_nr': 'pasaport_nr',
                         'passport_number': 'pasaport_nr',
-                        'nr_pașaport': 'pasaport_nr',
-                        'număr_pașaport': 'pasaport_nr',
                         'pașaport_nr': 'pasaport_nr',
-                        'pașaport': 'pasaport_nr',
+                        # Date pașaport
+                        'data_emitere_pașaport': 'data_emitere_pass',
+                        'data_emitere_pasaport': 'data_emitere_pass',
+                        'data_expirare_pașaport': 'data_exp_pass',
+                        'data_expirare_pasaport': 'data_exp_pass',
                         # Nume/Prenume
                         'first_name': 'prenume',
                         'last_name': 'nume',
@@ -315,16 +322,35 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         'nationality': 'cetatenie',
                         'citizenship': 'cetatenie',
                         'cetățenie': 'cetatenie',
-                        # Date
+                        'cetăţenie': 'cetatenie',
+                        # Date naștere
                         'birth_date': 'data_nasterii',
                         'date_of_birth': 'data_nasterii',
                         'data_nașterii': 'data_nasterii',
-                        # Altele
-                        'oraș_domiciliu': 'oras_domiciliu',
+                        'data_nastere': 'data_nasterii',
+                        # Stare civilă
                         'stare_civilă': 'stare_civila',
+                        'stare_civila': 'stare_civila',
+                        # Altele cu diacritice
+                        'oraș_domiciliu': 'oras_domiciliu',
+                        'oras_domiciliu': 'oras_domiciliu',
                         'copii_întreținere': 'copii_intretinere',
+                        'copii_intretinere': 'copii_intretinere',
                         'județ_wp': 'judet_wp',
+                        'judet_wp': 'judet_wp',
                         'observații': 'observatii',
+                        'observatii': 'observatii',
+                        # Work Permit
+                        'data_solicitare_aviz': 'data_solicitare_wp',
+                        'data_programare_igi': 'data_programare_wp',
+                        # Permis ședere
+                        'data_depunere_permis_ședere': 'data_depunere_ps',
+                        'data_programare_permis_ședere': 'data_programare_ps',
+                        'data_emitere_permis_ședere': 'data_emitere_ps',
+                        'data_expirare_permis_ședere': 'data_expirare_ps',
+                        # Client
+                        'client': 'client_denumire',
+                        'denumire_client': 'client_denumire',
                     }
                     headers.append(header_map.get(normalized, normalized))
                 else:
