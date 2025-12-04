@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard'
 import Workers from './pages/Workers'
 import WorkerForm from './pages/WorkerForm'
 import Clients from './pages/Clients'
+import Reports from './pages/Reports'
+import BulkImport from './pages/BulkImport'
 import Layout from './components/Layout'
 import PrivateRoute from './components/PrivateRoute'
 
@@ -36,6 +38,8 @@ function App() {
           <Route path="/workers/new" element={<WorkerForm />} />
           <Route path="/workers/:id" element={<WorkerForm />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/import-bulk" element={<BulkImport />} />
         </Route>
       </Route>
 
