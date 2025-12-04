@@ -1,5 +1,11 @@
 from django.db import models
 from django.contrib.auth.models import User
+import os
+
+
+def worker_document_path(instance, filename):
+    """Generează calea pentru documentele unui worker: documents/worker_{id}/{filename}"""
+    return f'documents/worker_{instance.worker.id}/{filename}'
 
 
 class UserRole(models.TextChoices):
@@ -96,6 +102,16 @@ class Worker(models.Model):
         related_name="workers_introdusi",
     )
 
+    # Expert/Manager responsabil pentru acest lucrător
+    expert = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="workers_asignati",
+        help_text="Expert/Manager care primește notificările pentru acest lucrător",
+    )
+
     # WP / IGI
     dosar_wp_nr = models.CharField(max_length=50, blank=True)
     data_solicitare_wp = models.DateField(null=True, blank=True)
@@ -140,4 +156,116 @@ class Worker(models.Model):
 
     def __str__(self):
         return f"{self.nume} {self.prenume} ({self.pasaport_nr})"
+
+
+class DocumentType(models.TextChoices):
+    PASAPORT = "pasaport", "Pașaport"
+    VIZA = "viza", "Viză"
+    AVIZ_IGI = "aviz_igi", "Aviz IGI"
+    CIM = "cim", "Contract Individual de Muncă"
+    PERMIS_SEDERE = "permis_sedere", "Permis de Ședere"
+    CERTIFICAT_MEDICAL = "certificat_medical", "Certificat Medical"
+    CAZIER = "cazier", "Cazier Judiciar"
+    DIPLOMA = "diploma", "Diplomă/Certificat Studii"
+    CV = "cv", "CV"
+    FOTO = "foto", "Fotografie"
+    CONTRACT_CAZARE = "contract_cazare", "Contract Cazare"
+    ALTELE = "altele", "Alte Documente"
+
+
+class WorkerDocument(models.Model):
+    """Documente atașate unui lucrător"""
+    worker = models.ForeignKey(
+        Worker,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(
+        max_length=30,
+        choices=DocumentType.choices,
+        default=DocumentType.ALTELE,
+    )
+    file = models.FileField(upload_to=worker_document_path)
+    original_filename = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="uploaded_documents",
+    )
+    file_size = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return f"{self.get_document_type_display()} - {self.original_filename}"
+
+
+class LogType(models.TextChoices):
+    SYSTEM = "SYSTEM", "Sistem"
+    AUTH = "AUTH", "Autentificare"
+    ACTIVITY = "ACTIVITY", "Activitate"
+
+
+class LogAction(models.TextChoices):
+    LOGIN = "LOGIN", "Login"
+    LOGOUT = "LOGOUT", "Logout"
+    LOGIN_FAILED = "LOGIN_FAILED", "Login eșuat"
+    CREATE = "CREATE", "Creare"
+    UPDATE = "UPDATE", "Modificare"
+    DELETE = "DELETE", "Ștergere"
+    STATUS_CHANGE = "STATUS_CHANGE", "Schimbare status"
+    UPLOAD = "UPLOAD", "Upload document"
+    DOWNLOAD = "DOWNLOAD", "Download document"
+    BULK_IMPORT = "BULK_IMPORT", "Import bulk"
+    EXPORT = "EXPORT", "Export date"
+    ERROR = "ERROR", "Eroare"
+    WARNING = "WARNING", "Avertizare"
+    INFO = "INFO", "Informație"
+
+
+class ActivityLog(models.Model):
+    """Jurnal de activități pentru audit"""
+    log_type = models.CharField(
+        max_length=20,
+        choices=LogType.choices,
+        default=LogType.ACTIVITY,
+        db_index=True,
+    )
+    action = models.CharField(
+        max_length=20,
+        choices=LogAction.choices,
+        db_index=True,
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activity_logs",
+    )
+    username = models.CharField(max_length=150, blank=True)
+    target_model = models.CharField(max_length=50, blank=True, db_index=True)
+    target_id = models.PositiveIntegerField(null=True, blank=True)
+    target_repr = models.CharField(max_length=255, blank=True)
+    details = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Log Activitate"
+        verbose_name_plural = "Loguri Activitate"
+        ordering = ["-timestamp"]
+        indexes = [
+            models.Index(fields=["-timestamp", "log_type"]),
+            models.Index(fields=["user", "-timestamp"]),
+            models.Index(fields=["target_model", "target_id"]),
+        ]
+
+    def __str__(self):
+        return f"{self.timestamp} - {self.action} - {self.username}"
 
