@@ -298,6 +298,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         'nr_pasaport': 'pasaport_nr',
                         'nr_pașaport': 'pasaport_nr',
                         'numar_pasaport': 'pasaport_nr',
+                        'număr_pasaport': 'pasaport_nr',
                         'număr_pașaport': 'pasaport_nr',
                         'pasaport': 'pasaport_nr',
                         'pașaport': 'pasaport_nr',
@@ -308,8 +309,10 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         # Date pașaport
                         'data_emitere_pașaport': 'data_emitere_pass',
                         'data_emitere_pasaport': 'data_emitere_pass',
+                        'data_emitere': 'data_emitere_pass',
                         'data_expirare_pașaport': 'data_exp_pass',
                         'data_expirare_pasaport': 'data_exp_pass',
+                        'data_expirare': 'data_exp_pass',
                         # Nume/Prenume
                         'first_name': 'prenume',
                         'last_name': 'nume',
@@ -323,6 +326,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         'citizenship': 'cetatenie',
                         'cetățenie': 'cetatenie',
                         'cetăţenie': 'cetatenie',
+                        'cetatenie': 'cetatenie',
                         # Date naștere
                         'birth_date': 'data_nasterii',
                         'date_of_birth': 'data_nasterii',
@@ -331,26 +335,71 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         # Stare civilă
                         'stare_civilă': 'stare_civila',
                         'stare_civila': 'stare_civila',
-                        # Altele cu diacritice
-                        'oraș_domiciliu': 'oras_domiciliu',
-                        'oras_domiciliu': 'oras_domiciliu',
+                        # Sex
+                        'sex': 'sex',
+                        'gen': 'sex',
+                        # Copii
                         'copii_întreținere': 'copii_intretinere',
                         'copii_intretinere': 'copii_intretinere',
+                        'copii_în_întreținere': 'copii_intretinere',
+                        'copii': 'copii_intretinere',
+                        # Oraș domiciliu
+                        'oraș_domiciliu': 'oras_domiciliu',
+                        'oras_domiciliu': 'oras_domiciliu',
+                        'oraș': 'oras_domiciliu',
+                        'oras': 'oras_domiciliu',
+                        'domiciliu': 'oras_domiciliu',
+                        # Work Permit
                         'județ_wp': 'judet_wp',
                         'judet_wp': 'judet_wp',
-                        'observații': 'observatii',
-                        'observatii': 'observatii',
-                        # Work Permit
+                        'județ': 'judet_wp',
+                        'judet': 'judet_wp',
+                        'dosar_wp_nr': 'dosar_wp_nr',
+                        'nr_dosar_wp': 'dosar_wp_nr',
+                        'nr_dosar': 'dosar_wp_nr',
                         'data_solicitare_aviz': 'data_solicitare_wp',
+                        'data_solicitare_wp': 'data_solicitare_wp',
                         'data_programare_igi': 'data_programare_wp',
+                        'data_programare_wp': 'data_programare_wp',
+                        # Cod COR
+                        'cod_cor': 'cod_cor',
+                        'cor': 'cod_cor',
+                        # Viză
+                        'data_solicitare_viza': 'data_solicitare_viza',
+                        'data_solicitare_viză': 'data_solicitare_viza',
+                        'data_programare_interviu': 'data_programare_interviu',
+                        'data_interviu': 'data_programare_interviu',
+                        # Status
+                        'status': 'status',
+                        'stare': 'status',
                         # Permis ședere
                         'data_depunere_permis_ședere': 'data_depunere_ps',
+                        'data_depunere_ps': 'data_depunere_ps',
                         'data_programare_permis_ședere': 'data_programare_ps',
+                        'data_programare_ps': 'data_programare_ps',
                         'data_emitere_permis_ședere': 'data_emitere_ps',
+                        'data_emitere_ps': 'data_emitere_ps',
                         'data_expirare_permis_ședere': 'data_expirare_ps',
+                        'data_expirare_ps': 'data_expirare_ps',
+                        # Date România
+                        'cnp': 'cnp',
+                        'data_intrare_ro': 'data_intrare_ro',
+                        'data_intrare_în_romania': 'data_intrare_ro',
+                        'data_intrare_în_ro': 'data_intrare_ro',
+                        'cim_nr': 'cim_nr',
+                        'nr_cim': 'cim_nr',
+                        'data_emitere_cim': 'data_emitere_cim',
+                        'adresa_ro': 'adresa_ro',
+                        'adresa': 'adresa_ro',
+                        'adresă_în_românia': 'adresa_ro',
                         # Client
                         'client': 'client_denumire',
+                        'client_denumire': 'client_denumire',
                         'denumire_client': 'client_denumire',
+                        # Observații
+                        'observații': 'observatii',
+                        'observatii': 'observatii',
+                        'obs': 'observatii',
                     }
                     headers.append(header_map.get(normalized, normalized))
                 else:

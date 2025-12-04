@@ -306,12 +306,12 @@ function WorkerForm() {
           </div>
         </section>
 
-        {/* Status și WP */}
+        {/* Status */}
         <section className="form-section">
-          <h2>Status și Work Permit</h2>
+          <h2>Status</h2>
           <div className="form-grid">
             <div className="form-group">
-              <label>Status</label>
+              <label>Status curent</label>
               <select name="status" value={formData.status} onChange={handleChange}>
                 {statusOptions.map(status => (
                   <option key={status} value={status}>{status}</option>
@@ -328,6 +328,13 @@ function WorkerForm() {
                 placeholder="ex: 721410"
               />
             </div>
+          </div>
+        </section>
+
+        {/* Work Permit / Aviz IGI */}
+        <section className="form-section">
+          <h2>Work Permit / Aviz IGI</h2>
+          <div className="form-grid">
             <div className="form-group">
               <label>Nr. dosar WP</label>
               <input
@@ -361,6 +368,130 @@ function WorkerForm() {
                 type="date"
                 name="data_programare_wp"
                 value={formData.data_programare_wp || ''}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Viză */}
+        <section className="form-section">
+          <h2>Viză</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Data solicitare viză</label>
+              <input
+                type="date"
+                name="data_solicitare_viza"
+                value={formData.data_solicitare_viza || ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Data programare interviu</label>
+              <input
+                type="date"
+                name="data_programare_interviu"
+                value={formData.data_programare_interviu || ''}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Date România - după sosire */}
+        <section className="form-section">
+          <h2>Date România (după sosire)</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>CNP</label>
+              <input
+                type="text"
+                name="cnp"
+                value={formData.cnp}
+                onChange={handleChange}
+                maxLength="13"
+                placeholder="13 cifre"
+              />
+            </div>
+            <div className="form-group">
+              <label>Data intrare în România</label>
+              <input
+                type="date"
+                name="data_intrare_ro"
+                value={formData.data_intrare_ro || ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Nr. CIM</label>
+              <input
+                type="text"
+                name="cim_nr"
+                value={formData.cim_nr}
+                onChange={handleChange}
+                placeholder="Contract Individual de Muncă"
+              />
+            </div>
+            <div className="form-group">
+              <label>Data emitere CIM</label>
+              <input
+                type="date"
+                name="data_emitere_cim"
+                value={formData.data_emitere_cim || ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group full-width">
+              <label>Adresă în România</label>
+              <input
+                type="text"
+                name="adresa_ro"
+                value={formData.adresa_ro}
+                onChange={handleChange}
+                placeholder="Adresa completă"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Permis de Ședere */}
+        <section className="form-section">
+          <h2>Permis de Ședere</h2>
+          <div className="form-grid">
+            <div className="form-group">
+              <label>Data depunere PS</label>
+              <input
+                type="date"
+                name="data_depunere_ps"
+                value={formData.data_depunere_ps || ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Data programare PS</label>
+              <input
+                type="date"
+                name="data_programare_ps"
+                value={formData.data_programare_ps || ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Data emitere PS</label>
+              <input
+                type="date"
+                name="data_emitere_ps"
+                value={formData.data_emitere_ps || ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="form-group">
+              <label>Data expirare PS</label>
+              <input
+                type="date"
+                name="data_expirare_ps"
+                value={formData.data_expirare_ps || ''}
                 onChange={handleChange}
               />
             </div>
