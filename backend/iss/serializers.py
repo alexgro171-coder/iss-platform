@@ -57,21 +57,27 @@ class WorkerDocumentSerializer(serializers.ModelSerializer):
 
 
 class WorkerSerializer(serializers.ModelSerializer):
-    client_denumire = serializers.CharField(
-        source="client.denumire", read_only=True
-    )
+    client_denumire = serializers.SerializerMethodField()
     documents = WorkerDocumentSerializer(many=True, read_only=True)
     
     # Informații CodCOR pentru afișare
-    cod_cor_denumire_ro = serializers.CharField(
-        source="cod_cor_ref.denumire_ro", read_only=True
-    )
-    cod_cor_denumire_en = serializers.CharField(
-        source="cod_cor_ref.denumire_en", read_only=True
-    )
+    cod_cor_denumire_ro = serializers.SerializerMethodField()
+    cod_cor_denumire_en = serializers.SerializerMethodField()
 
     class Meta:
         model = Worker
         fields = "__all__"
         read_only_fields = ("data_introducere",)
+
+    def get_client_denumire(self, obj):
+        """Returnează denumirea clientului sau None dacă client este null."""
+        return obj.client.denumire if obj.client else None
+
+    def get_cod_cor_denumire_ro(self, obj):
+        """Returnează denumirea COR în română sau None."""
+        return obj.cod_cor_ref.denumire_ro if obj.cod_cor_ref else None
+
+    def get_cod_cor_denumire_en(self, obj):
+        """Returnează denumirea COR în engleză sau None."""
+        return obj.cod_cor_ref.denumire_en if obj.cod_cor_ref else None
 
