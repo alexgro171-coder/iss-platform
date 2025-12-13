@@ -588,40 +588,21 @@ class WorkerViewSet(viewsets.ModelViewSet):
 
 
 class WorkerDocumentViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet pentru gestionarea documentelor lucrătorilor.
-    Acces control matching WorkerViewSet:
-    - Agent -> doar documente pentru lucrătorii unde agent=user, fără DELETE
-    - Expert/Management/Admin -> toate documentele
-    """
+    """ViewSet pentru gestionarea documentelor lucrătorilor."""
     queryset = WorkerDocument.objects.all()
     serializer_class = WorkerDocumentSerializer
-    permission_classes = [AgentCannotDelete]
-
-    def _get_accessible_workers(self):
-        """Returnează workers la care user-ul are acces."""
-        user = self.request.user
-        try:
-            role = user.profile.role
-        except UserProfile.DoesNotExist:
-            role = None
-        if role == UserRole.AGENT:
-            return Worker.objects.filter(agent=user)
-        return Worker.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Filtrare documente bazat pe rol și worker_id."""
-        if not self.request.user.is_authenticated:
-            return WorkerDocument.objects.none()
-        accessible_workers = self._get_accessible_workers()
-        queryset = WorkerDocument.objects.filter(worker__in=accessible_workers)
+        """Filtrare documente după worker_id dacă e specificat."""
+        queryset = WorkerDocument.objects.all()
         worker_id = self.request.query_params.get('worker_id')
         if worker_id:
             queryset = queryset.filter(worker_id=worker_id)
-        return queryset.select_related('worker', 'uploaded_by')
+        return queryset
 
     def create(self, request, *args, **kwargs):
-        """Upload document - verifică acces la worker."""
+        """Upload document nou."""
         file = request.FILES.get('file')
         if not file:
             return Response(
@@ -644,12 +625,6 @@ class WorkerDocumentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        if not self._get_accessible_workers().filter(pk=worker_id).exists():
-            return Response(
-                {'detail': 'Nu aveți permisiunea de a încărca documente pentru acest lucrător.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         document = WorkerDocument.objects.create(
             worker=worker,
             document_type=request.data.get('document_type', 'altele'),
@@ -664,8 +639,9 @@ class WorkerDocumentViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
-        """Șterge document (blocat pentru agenți de AgentCannotDelete)."""
+        """Șterge un document."""
         instance = self.get_object()
+        # Ștergem și fișierul fizic
         if instance.file:
             instance.file.delete(save=False)
         self.perform_destroy(instance)
