@@ -7,8 +7,8 @@ from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 
-from .models import Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction
-from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer
+from .models import Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction, WorkerDocument
+from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer, WorkerDocumentSerializer
 
 
 @api_view(["GET"])
@@ -585,4 +585,65 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 {'detail': f'Eroare la procesarea fișierului: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class WorkerDocumentViewSet(viewsets.ModelViewSet):
+    """ViewSet pentru gestionarea documentelor lucrătorilor."""
+    queryset = WorkerDocument.objects.all()
+    serializer_class = WorkerDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """Filtrare documente după worker_id dacă e specificat."""
+        queryset = WorkerDocument.objects.all()
+        worker_id = self.request.query_params.get('worker_id')
+        if worker_id:
+            queryset = queryset.filter(worker_id=worker_id)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        """Upload document nou."""
+        file = request.FILES.get('file')
+        if not file:
+            return Response(
+                {'detail': 'Fișierul este obligatoriu.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        worker_id = request.data.get('worker_id')
+        if not worker_id:
+            return Response(
+                {'detail': 'worker_id este obligatoriu.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            worker = Worker.objects.get(pk=worker_id)
+        except Worker.DoesNotExist:
+            return Response(
+                {'detail': 'Lucrătorul nu a fost găsit.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        document = WorkerDocument.objects.create(
+            worker=worker,
+            document_type=request.data.get('document_type', 'altele'),
+            file=file,
+            original_filename=file.name,
+            description=request.data.get('description', ''),
+            uploaded_by=request.user,
+            file_size=file.size,
+        )
+
+        serializer = self.get_serializer(document)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        """Șterge un document."""
+        instance = self.get_object()
+        # Ștergem și fișierul fizic
+        if instance.file:
+            instance.file.delete(save=False)
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 

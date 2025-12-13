@@ -91,7 +91,171 @@
   border-top: 1px solid var(--border-color);
 }
 
+/* ============================================
+   Documents Section
+   ============================================ */
+
+.documents-section {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+}
+
+.documents-notice {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.documents-notice p {
+  margin: 0;
+  color: var(--accent-primary);
+}
+
+/* Upload Form */
+.document-upload-form {
+  background: var(--bg-primary);
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.upload-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr auto;
+  gap: var(--spacing-md);
+  align-items: end;
+}
+
+.upload-btn-group {
+  min-width: 200px;
+}
+
+.upload-btn-group input[type="file"] {
+  padding: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.upload-btn-group input[type="file"]:hover {
+  border-color: var(--accent-primary);
+}
+
+.upload-status {
+  color: var(--accent-primary);
+  margin-top: var(--spacing-sm);
+  font-style: italic;
+}
+
+.upload-error {
+  color: var(--accent-danger);
+  margin-top: var(--spacing-sm);
+}
+
+/* Documents Table */
+.documents-list {
+  overflow-x: auto;
+}
+
+.documents-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.documents-table th,
+.documents-table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.documents-table th {
+  background: var(--bg-primary);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.documents-table tr:hover {
+  background: var(--bg-primary);
+}
+
+/* Document Type Badges */
+.doc-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.doc-type-pasaport { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.doc-type-viza { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.doc-type-aviz_igi { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.doc-type-cim { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+.doc-type-permis_sedere { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+.doc-type-certificat_medical { background: rgba(6, 182, 212, 0.2); color: #06b6d4; }
+.doc-type-cazier { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.doc-type-diploma { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+.doc-type-cv { background: rgba(99, 102, 241, 0.2); color: #6366f1; }
+.doc-type-foto { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+.doc-type-contract_cazare { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+.doc-type-altele { background: rgba(107, 114, 128, 0.2); color: #6b7280; }
+
+/* Document Actions */
+.doc-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.btn-doc {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.btn-download:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.no-documents {
+  text-align: center;
+  color: var(--text-muted);
+  padding: var(--spacing-lg);
+  font-style: italic;
+}
+
 /* Responsive */
+@media (max-width: 768px) {
+  .upload-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .documents-table {
+    font-size: 0.75rem;
+  }
+  
+  .documents-table th,
+  .documents-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}
+
 @media (max-width: 600px) {
   .form-grid {
     grid-template-columns: 1fr;

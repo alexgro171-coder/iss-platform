@@ -147,3 +147,5 @@ Pentru a crea un superuser:
 docker compose exec backend python manage.py createsuperuser
 ```
 
+
+

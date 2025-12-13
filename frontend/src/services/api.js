@@ -166,5 +166,43 @@ export const clientsAPI = {
   },
 }
 
+// ============================================
+// WORKER DOCUMENTS API
+// ============================================
+
+export const workerDocumentsAPI = {
+  // Listare documente pentru un lucrător
+  getByWorkerId: async (workerId) => {
+    const response = await api.get(`/worker-documents/?worker_id=${workerId}`)
+    return response.data
+  },
+
+  // Upload document nou
+  upload: async (workerId, file, documentType = 'altele', description = '') => {
+    const formData = new FormData()
+    formData.append('worker_id', workerId)
+    formData.append('file', file)
+    formData.append('document_type', documentType)
+    formData.append('description', description)
+
+    const response = await api.post('/worker-documents/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
+
+  // Șterge document
+  delete: async (documentId) => {
+    await api.delete(`/worker-documents/${documentId}/`)
+  },
+
+  // Descarcă document (returnează URL-ul)
+  getDownloadUrl: (documentId) => {
+    return `${API_BASE_URL}/worker-documents/${documentId}/`
+  },
+}
+
 export default api
 

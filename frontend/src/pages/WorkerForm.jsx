@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { workersAPI, clientsAPI } from '../services/api'
+import { workersAPI, clientsAPI, workerDocumentsAPI } from '../services/api'
 import './WorkerForm.css'
 
 /**
@@ -15,6 +15,30 @@ function WorkerForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [clients, setClients] = useState([])
+  
+  // State pentru documente
+  const [documents, setDocuments] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [selectedDocType, setSelectedDocType] = useState('altele')
+  const [docDescription, setDocDescription] = useState('')
+  const fileInputRef = useRef(null)
+  
+  // Tipuri de documente disponibile
+  const documentTypes = [
+    { value: 'pasaport', label: 'Pașaport' },
+    { value: 'viza', label: 'Viză' },
+    { value: 'aviz_igi', label: 'Aviz IGI' },
+    { value: 'cim', label: 'Contract Individual de Muncă' },
+    { value: 'permis_sedere', label: 'Permis de Ședere' },
+    { value: 'certificat_medical', label: 'Certificat Medical' },
+    { value: 'cazier', label: 'Cazier Judiciar' },
+    { value: 'diploma', label: 'Diplomă/Certificat Studii' },
+    { value: 'cv', label: 'CV' },
+    { value: 'foto', label: 'Fotografie' },
+    { value: 'contract_cazare', label: 'Contract Cazare' },
+    { value: 'altele', label: 'Alte Documente' },
+  ]
 
   const [formData, setFormData] = useState({
     nume: '',
@@ -85,6 +109,14 @@ function WorkerForm() {
           copii_intretinere: worker.copii_intretinere || 0,
           status: worker.status || 'Aviz solicitat',
         })
+        
+        // Încarcă documentele lucrătorului
+        try {
+          const docs = await workerDocumentsAPI.getByWorkerId(id)
+          setDocuments(docs)
+        } catch (docError) {
+          console.error('Error loading documents:', docError)
+        }
       }
     } catch (error) {
       console.error('Error loading worker:', error)
@@ -145,6 +177,57 @@ function WorkerForm() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Funcție pentru upload document
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    if (!isEditing || !id) {
+      setUploadError('Salvează mai întâi lucrătorul pentru a putea adăuga documente.')
+      return
+    }
+
+    setUploading(true)
+    setUploadError('')
+
+    try {
+      const newDoc = await workerDocumentsAPI.upload(id, file, selectedDocType, docDescription)
+      setDocuments(prev => [newDoc, ...prev])
+      setDocDescription('')
+      setSelectedDocType('altele')
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (err) {
+      console.error('Upload error:', err)
+      setUploadError(err.response?.data?.detail || 'Eroare la încărcarea fișierului')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Funcție pentru ștergere document
+  const handleDeleteDocument = async (docId) => {
+    if (!window.confirm('Sigur dorești să ștergi acest document?')) return
+
+    try {
+      await workerDocumentsAPI.delete(docId)
+      setDocuments(prev => prev.filter(d => d.id !== docId))
+    } catch (err) {
+      console.error('Delete error:', err)
+      setUploadError('Eroare la ștergerea documentului')
+    }
+  }
+
+  // Formatare dimensiune fișier
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
   const statusOptions = [
@@ -522,6 +605,113 @@ function WorkerForm() {
               />
             </div>
           </div>
+        </section>
+
+        {/* Documente */}
+        <section className="form-section documents-section">
+          <h2>📎 Documente Atașate</h2>
+          
+          {!isEditing && (
+            <div className="documents-notice">
+              <p>💡 Salvează lucrătorul pentru a putea adăuga documente.</p>
+            </div>
+          )}
+
+          {isEditing && (
+            <>
+              {/* Upload Form */}
+              <div className="document-upload-form">
+                <div className="upload-row">
+                  <div className="form-group">
+                    <label>Tip document</label>
+                    <select 
+                      value={selectedDocType} 
+                      onChange={(e) => setSelectedDocType(e.target.value)}
+                    >
+                      {documentTypes.map(dt => (
+                        <option key={dt.value} value={dt.value}>{dt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Descriere (opțional)</label>
+                    <input
+                      type="text"
+                      value={docDescription}
+                      onChange={(e) => setDocDescription(e.target.value)}
+                      placeholder="ex: Pașaport principal"
+                    />
+                  </div>
+                  <div className="form-group upload-btn-group">
+                    <label>Fișier</label>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      disabled={uploading}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                    />
+                  </div>
+                </div>
+                {uploading && <p className="upload-status">Se încarcă...</p>}
+                {uploadError && <p className="upload-error">{uploadError}</p>}
+              </div>
+
+              {/* Documents List */}
+              {documents.length > 0 ? (
+                <div className="documents-list">
+                  <table className="documents-table">
+                    <thead>
+                      <tr>
+                        <th>Tip</th>
+                        <th>Nume fișier</th>
+                        <th>Descriere</th>
+                        <th>Mărime</th>
+                        <th>Data</th>
+                        <th>Acțiuni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {documents.map(doc => (
+                        <tr key={doc.id}>
+                          <td>
+                            <span className={`doc-type-badge doc-type-${doc.document_type}`}>
+                              {doc.document_type_display}
+                            </span>
+                          </td>
+                          <td>{doc.original_filename}</td>
+                          <td>{doc.description || '-'}</td>
+                          <td>{formatFileSize(doc.file_size)}</td>
+                          <td>{new Date(doc.uploaded_at).toLocaleDateString('ro-RO')}</td>
+                          <td className="doc-actions">
+                            <a 
+                              href={doc.file} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="btn-doc btn-download"
+                              title="Descarcă"
+                            >
+                              ⬇️
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="btn-doc btn-delete"
+                              title="Șterge"
+                            >
+                              🗑️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="no-documents">Nu există documente atașate.</p>
+              )}
+            </>
+          )}
         </section>
 
         {/* Butoane */}
