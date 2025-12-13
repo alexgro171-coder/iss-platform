@@ -11,6 +11,7 @@ from rest_framework_simplejwt.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("iss.urls")),
+    path("api/eco-fin/", include("ecofin.urls")),  # Microserviciu Eco-Fin
     path("api-auth/", include("rest_framework.urls")),
     
     # JWT Authentication endpoints

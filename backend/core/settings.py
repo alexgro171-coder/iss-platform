@@ -54,6 +54,7 @@ INSTALLED_APPS = [
 
     # Apps interne
     "iss",
+    "ecofin",  # Microserviciu Eco-Fin pentru profitabilitate
 ]
 
 MIDDLEWARE = [

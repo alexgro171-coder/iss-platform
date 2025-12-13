@@ -9,6 +9,7 @@ import Reports from './pages/Reports'
 import BulkImport from './pages/BulkImport'
 import Templates from './pages/Templates'
 import CoduriCOR from './pages/CoduriCOR'
+import EcoFin from './pages/EcoFin'
 import Layout from './components/Layout'
 import PrivateRoute from './components/PrivateRoute'
 
@@ -44,6 +45,7 @@ function App() {
           <Route path="/import-bulk" element={<BulkImport />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/coduri-cor" element={<CoduriCOR />} />
+          <Route path="/eco-fin" element={<EcoFin />} />
         </Route>
       </Route>
 

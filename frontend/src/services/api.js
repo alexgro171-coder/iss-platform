@@ -242,5 +242,87 @@ export const workerDocumentsAPI = {
   },
 }
 
+// ============================================
+// ECO-FIN API (Microserviciu Profitabilitate)
+// ============================================
+
+export const ecoFinAPI = {
+  // === SETĂRI ===
+  getSettings: async (year, month) => {
+    const response = await api.get(`/eco-fin/settings/current/${year}/${month}/`)
+    return response.data
+  },
+
+  getAllSettings: async () => {
+    const response = await api.get('/eco-fin/settings/')
+    return response.data
+  },
+
+  createSettings: async (data) => {
+    const response = await api.post('/eco-fin/settings/', data)
+    return response.data
+  },
+
+  updateSettings: async (id, data) => {
+    const response = await api.patch(`/eco-fin/settings/${id}/`, data)
+    return response.data
+  },
+
+  // === RAPOARTE ===
+  getReports: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/reports/?${queryParams}`)
+    return response.data
+  },
+
+  getReportSummary: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/reports/summary/?${queryParams}`)
+    return response.data
+  },
+
+  updateReport: async (id, data) => {
+    const response = await api.patch(`/eco-fin/reports/${id}/`, data)
+    return response.data
+  },
+
+  deleteReport: async (id) => {
+    await api.delete(`/eco-fin/reports/${id}/`)
+  },
+
+  // === IMPORT ===
+  uploadExcel: async (file, year, month) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('year', year)
+    formData.append('month', month)
+
+    const response = await api.post('/eco-fin/import/upload/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  validateImport: async (year, month, rows) => {
+    const response = await api.post('/eco-fin/import/validate/', {
+      year,
+      month,
+      rows
+    })
+    return response.data
+  },
+
+  getImportBatches: async () => {
+    const response = await api.get('/eco-fin/import/batches/')
+    return response.data
+  },
+}
+
 export default api
 
