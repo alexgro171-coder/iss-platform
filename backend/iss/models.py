@@ -47,6 +47,27 @@ class Client(models.Model):
         return self.denumire
 
 
+class CodCOR(models.Model):
+    """
+    Nomenclator Coduri COR (Clasificarea Ocupațiilor din România).
+    Folosit pentru selectare cod ocupație în formulare și template-uri.
+    """
+    cod = models.CharField(max_length=10, unique=True, help_text="Codul numeric COR (ex: 721410)")
+    denumire_ro = models.CharField(max_length=255, help_text="Denumirea ocupației în română")
+    denumire_en = models.CharField(max_length=255, blank=True, help_text="Denumirea ocupației în engleză")
+    activ = models.BooleanField(default=True, help_text="Dacă codul este activ și poate fi selectat")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Cod COR"
+        verbose_name_plural = "Coduri COR"
+        ordering = ['cod']
+
+    def __str__(self):
+        return f"{self.cod} - {self.denumire_ro}"
+
+
 class WorkerStatus(models.TextChoices):
     AVIZ_SOLICITAT = "Aviz solicitat", "Aviz solicitat"
     AVIZ_EMIS = "Aviz emis", "Aviz emis"
@@ -90,7 +111,17 @@ class Worker(models.Model):
 
     # Meta
     data_introducere = models.DateTimeField(auto_now_add=True)
-    cod_cor = models.CharField(max_length=10, blank=True)
+    cod_cor = models.CharField(max_length=10, blank=True)  # Păstrat pentru compatibilitate
+    
+    # Legătură la nomenclatorul CodCOR (nou)
+    cod_cor_ref = models.ForeignKey(
+        'CodCOR',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workers',
+        help_text="Referință la nomenclatorul Coduri COR"
+    )
 
     # Agentul care a introdus candidatul
     agent = models.ForeignKey(

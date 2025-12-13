@@ -167,6 +167,44 @@ export const clientsAPI = {
 }
 
 // ============================================
+// CODURI COR API
+// ============================================
+
+export const coduriCORAPI = {
+  // Listare toate codurile COR
+  getAll: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    if (params.activ !== undefined) queryParams.append('activ', params.activ)
+    if (params.search) queryParams.append('search', params.search)
+    const response = await api.get(`/coduri-cor/?${queryParams}`)
+    return response.data
+  },
+
+  // Obține un cod COR
+  getById: async (id) => {
+    const response = await api.get(`/coduri-cor/${id}/`)
+    return response.data
+  },
+
+  // Crează cod COR nou
+  create: async (data) => {
+    const response = await api.post('/coduri-cor/', data)
+    return response.data
+  },
+
+  // Actualizează cod COR
+  update: async (id, data) => {
+    const response = await api.patch(`/coduri-cor/${id}/`, data)
+    return response.data
+  },
+
+  // Șterge cod COR
+  delete: async (id) => {
+    await api.delete(`/coduri-cor/${id}/`)
+  },
+}
+
+// ============================================
 // WORKER DOCUMENTS API
 // ============================================
 

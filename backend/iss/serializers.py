@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Client, Worker, UserProfile, WorkerDocument
+from .models import Client, Worker, UserProfile, WorkerDocument, CodCOR
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -29,6 +29,14 @@ class ClientSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class CodCORSerializer(serializers.ModelSerializer):
+    """Serializer pentru nomenclatorul Coduri COR."""
+    class Meta:
+        model = CodCOR
+        fields = ['id', 'cod', 'denumire_ro', 'denumire_en', 'activ', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
 class WorkerDocumentSerializer(serializers.ModelSerializer):
     """Serializer pentru documentele lucrătorilor."""
     document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
@@ -53,6 +61,14 @@ class WorkerSerializer(serializers.ModelSerializer):
         source="client.denumire", read_only=True
     )
     documents = WorkerDocumentSerializer(many=True, read_only=True)
+    
+    # Informații CodCOR pentru afișare
+    cod_cor_denumire_ro = serializers.CharField(
+        source="cod_cor_ref.denumire_ro", read_only=True
+    )
+    cod_cor_denumire_en = serializers.CharField(
+        source="cod_cor_ref.denumire_en", read_only=True
+    )
 
     class Meta:
         model = Worker

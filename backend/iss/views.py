@@ -1,5 +1,6 @@
 from django.utils.dateparse import parse_date
 from django.http import HttpResponse
+from django.db import models
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
@@ -7,8 +8,8 @@ from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 
-from .models import Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction, WorkerDocument
-from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer, WorkerDocumentSerializer
+from .models import Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction, WorkerDocument, CodCOR
+from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer, WorkerDocumentSerializer, CodCORSerializer
 
 
 @api_view(["GET"])
@@ -87,6 +88,37 @@ class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by("denumire")
     serializer_class = ClientSerializer
     permission_classes = [IsManagementOrReadOnly]
+
+
+class CodCORViewSet(viewsets.ModelViewSet):
+    """
+    CRUD pentru nomenclatorul Coduri COR.
+    - GET (listare): toți utilizatorii autentificați
+    - POST/PUT/DELETE: doar Management/Admin
+    """
+    queryset = CodCOR.objects.all().order_by('cod')
+    serializer_class = CodCORSerializer
+    permission_classes = [IsManagementOrReadOnly]
+
+    def get_queryset(self):
+        """Filtrare opțională după status activ."""
+        queryset = CodCOR.objects.all()
+        
+        # Filtru doar coduri active (implicit pentru dropdown-uri)
+        activ = self.request.query_params.get('activ')
+        if activ is not None:
+            queryset = queryset.filter(activ=activ.lower() == 'true')
+        
+        # Căutare după cod sau denumire
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(cod__icontains=search) |
+                models.Q(denumire_ro__icontains=search) |
+                models.Q(denumire_en__icontains=search)
+            )
+        
+        return queryset.order_by('cod')
 
 
 class WorkerViewSet(viewsets.ModelViewSet):

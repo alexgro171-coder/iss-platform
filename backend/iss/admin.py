@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Client, Worker, UserProfile, ActivityLog, WorkerDocument
+from .models import Client, Worker, UserProfile, ActivityLog, WorkerDocument, CodCOR
 
 
 @admin.register(Client)
@@ -30,6 +30,15 @@ class WorkerDocumentAdmin(admin.ModelAdmin):
     list_filter = ("document_type", "uploaded_at")
     search_fields = ("worker__nume", "worker__prenume", "original_filename")
     date_hierarchy = "uploaded_at"
+
+
+@admin.register(CodCOR)
+class CodCORAdmin(admin.ModelAdmin):
+    list_display = ("cod", "denumire_ro", "denumire_en", "activ", "updated_at")
+    list_filter = ("activ",)
+    search_fields = ("cod", "denumire_ro", "denumire_en")
+    list_editable = ("activ",)
+    ordering = ("cod",)
 
 
 @admin.register(ActivityLog)

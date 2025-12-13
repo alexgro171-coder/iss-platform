@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { workersAPI, clientsAPI, workerDocumentsAPI } from '../services/api'
+import { workersAPI, clientsAPI, workerDocumentsAPI, coduriCORAPI } from '../services/api'
 import './WorkerForm.css'
 
 /**
@@ -15,6 +15,7 @@ function WorkerForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [clients, setClients] = useState([])
+  const [coduriCOR, setCoduriCOR] = useState([])
   
   // State pentru documente
   const [documents, setDocuments] = useState([])
@@ -80,9 +81,13 @@ function WorkerForm() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Încarcă lista de clienți
-      const clientsData = await clientsAPI.getAll()
+      // Încarcă lista de clienți și coduri COR
+      const [clientsData, coduriData] = await Promise.all([
+        clientsAPI.getAll(),
+        coduriCORAPI.getAll({ activ: true })
+      ])
       setClients(clientsData)
+      setCoduriCOR(coduriData)
 
       // Dacă editează, încarcă datele lucrătorului
       if (isEditing) {
@@ -403,13 +408,20 @@ function WorkerForm() {
             </div>
             <div className="form-group">
               <label>Cod COR</label>
-              <input
-                type="text"
-                name="cod_cor"
-                value={formData.cod_cor}
-                onChange={handleChange}
-                placeholder="ex: 721410"
-              />
+              <select name="cod_cor" value={formData.cod_cor} onChange={handleChange}>
+                <option value="">Selectează codul COR</option>
+                {coduriCOR.map(cor => (
+                  <option key={cor.id} value={cor.cod}>
+                    {cor.cod} - {cor.denumire_ro}
+                  </option>
+                ))}
+              </select>
+              {formData.cod_cor && (
+                <small className="help-text">
+                  {coduriCOR.find(c => c.cod === formData.cod_cor)?.denumire_en && 
+                    `EN: ${coduriCOR.find(c => c.cod === formData.cod_cor)?.denumire_en}`}
+                </small>
+              )}
             </div>
           </div>
         </section>

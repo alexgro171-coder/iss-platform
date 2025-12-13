@@ -119,6 +119,16 @@ function Layout() {
             </NavLink>
           )}
 
+          {/* Coduri COR - doar Management/Admin */}
+          {isManagementOrAdmin() && (
+            <NavLink to="/coduri-cor" className="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 6h16M4 12h16M4 18h10" />
+              </svg>
+              <span>Coduri COR</span>
+            </NavLink>
+          )}
+
           {/* Template-uri - accesibil pentru Expert și mai sus */}
           {isExpertOrAbove() && (
             <NavLink to="/templates" className="nav-item">
