@@ -78,6 +78,51 @@ export function AuthProvider({ children }) {
     return user && ['Management', 'Admin'].includes(user.role)
   }
 
+  // Verifică dacă e Expert sau mai sus (Expert, Management, Admin)
+  const isExpertOrAbove = () => {
+    return user && ['Expert', 'Management', 'Admin'].includes(user.role)
+  }
+
+  // Returnează drepturile utilizatorului curent
+  const getUserRights = () => {
+    if (!user) return []
+    
+    const rights = {
+      Agent: [
+        'Vizualizare lucrători proprii',
+        'Adăugare lucrători noi',
+        'Editare date lucrători',
+        'Upload documente',
+        'Schimbare status',
+      ],
+      Expert: [
+        'Vizualizare toți lucrătorii',
+        'Editare date lucrători',
+        'Upload documente',
+        'Schimbare status',
+        'Vizualizare rapoarte',
+        'Generare template-uri',
+        'Filtre avansate (8 criterii)',
+      ],
+      Management: [
+        'Acces complet lucrători',
+        'Gestionare clienți',
+        'Rapoarte cu export Excel/PDF',
+        'Import bulk lucrători',
+        'Generare template-uri',
+        'Ștergere înregistrări',
+      ],
+      Admin: [
+        'Acces complet sistem',
+        'Gestionare utilizatori',
+        'Configurare aplicație',
+        'Toate drepturile Management',
+      ],
+    }
+    
+    return rights[user.role] || []
+  }
+
   const value = {
     user,
     loading,
@@ -86,6 +131,8 @@ export function AuthProvider({ children }) {
     hasRole,
     canDelete,
     isManagementOrAdmin,
+    isExpertOrAbove,
+    getUserRights,
   }
 
   return (

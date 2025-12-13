@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import './Layout.css'
@@ -7,8 +8,9 @@ import './Layout.css'
  * Include sidebar-ul cu navigare și zona de conținut.
  */
 function Layout() {
-  const { user, logout, isManagementOrAdmin } = useAuth()
+  const { user, logout, isManagementOrAdmin, isExpertOrAbove, getUserRights } = useAuth()
   const navigate = useNavigate()
+  const [showRights, setShowRights] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -101,23 +103,53 @@ function Layout() {
             </NavLink>
           )}
 
-          {isManagementOrAdmin() && (
+          {/* Rapoarte - accesibil pentru Expert și mai sus */}
+          {isExpertOrAbove() && (
             <NavLink to="/reports" className="nav-item">
               {icons.reports}
               <span>Rapoarte</span>
             </NavLink>
           )}
 
+          {/* Import Bulk - doar Management/Admin */}
           {isManagementOrAdmin() && (
             <NavLink to="/import-bulk" className="nav-item">
               {icons.import}
               <span>Import Bulk</span>
             </NavLink>
           )}
+
+          {/* Template-uri - accesibil pentru Expert și mai sus */}
+          {isExpertOrAbove() && (
+            <NavLink to="/templates" className="nav-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <path d="M12 18v-6" />
+                <path d="M9 15h6" />
+              </svg>
+              <span>Template-uri</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-info">
+          {/* Panel drepturi utilizator */}
+          {showRights && (
+            <div className="rights-panel">
+              <div className="rights-header">
+                <span>Drepturi {user?.role}</span>
+                <button onClick={() => setShowRights(false)} className="close-rights">×</button>
+              </div>
+              <ul className="rights-list">
+                {getUserRights().map((right, idx) => (
+                  <li key={idx}>✓ {right}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          <div className="user-info" onClick={() => setShowRights(!showRights)} style={{ cursor: 'pointer' }}>
             <div className="user-avatar">
               {user?.username?.charAt(0).toUpperCase()}
             </div>
