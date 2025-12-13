@@ -151,6 +151,22 @@ class WorkerViewSet(viewsets.ModelViewSet):
         if judet_wp:
             qs = qs.filter(judet_wp__iexact=judet_wp)
 
+        # Filtru după luna și anul WP (data_programare_wp)
+        luna_wp = params.get("luna_wp")
+        anul_wp = params.get("anul_wp")
+        if luna_wp:
+            qs = qs.filter(data_programare_wp__month=int(luna_wp))
+        if anul_wp:
+            qs = qs.filter(data_programare_wp__year=int(anul_wp))
+
+        # Filtru după luna și anul Viză (data_programare_interviu)
+        luna_viza = params.get("luna_viza")
+        anul_viza = params.get("anul_viza")
+        if luna_viza:
+            qs = qs.filter(data_programare_interviu__month=int(luna_viza))
+        if anul_viza:
+            qs = qs.filter(data_programare_interviu__year=int(anul_viza))
+
         # interval data_introducere
         data_start = params.get("data_start")
         data_end = params.get("data_end")

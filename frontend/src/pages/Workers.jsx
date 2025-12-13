@@ -19,6 +19,8 @@ function Workers() {
     client_id: '',
     luna_wp: '',
     anul_wp: '',
+    luna_viza: '',
+    anul_viza: '',
   })
   const [clients, setClients] = useState([])
 
@@ -70,6 +72,8 @@ function Workers() {
       client_id: '',
       luna_wp: '',
       anul_wp: '',
+      luna_viza: '',
+      anul_viza: '',
     })
   }
 
@@ -248,6 +252,34 @@ function Workers() {
             <select 
               name="anul_wp" 
               value={filters.anul_wp} 
+              onChange={handleFilterChange}
+            >
+              <option value="">Toți anii</option>
+              {years.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Luna Viză</label>
+            <select 
+              name="luna_viza" 
+              value={filters.luna_viza} 
+              onChange={handleFilterChange}
+            >
+              <option value="">Toate</option>
+              {months.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>Anul Viză</label>
+            <select 
+              name="anul_viza" 
+              value={filters.anul_viza} 
               onChange={handleFilterChange}
             >
               <option value="">Toți anii</option>
