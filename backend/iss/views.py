@@ -222,6 +222,85 @@ class WorkerViewSet(viewsets.ModelViewSet):
         """
         serializer.save(agent=self.request.user)
 
+    @action(detail=False, methods=['get'], url_path='statistics')
+    def statistics(self, request):
+        """
+        Returnează statistici despre lucrători.
+        GET /api/workers/statistics/
+        Accesibil pentru Expert, Management, Admin.
+        """
+        # Verifică dacă user-ul are acces (Expert sau mai sus)
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+        
+        if role not in [UserRole.EXPERT, UserRole.MANAGEMENT, UserRole.ADMIN]:
+            return Response(
+                {'detail': 'Nu aveți permisiunea de a accesa statisticile.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Baza: toți lucrătorii (Expert/Management/Admin văd tot)
+        qs = Worker.objects.all()
+        
+        # Aplicăm filtre din query params
+        params = request.query_params
+        
+        status_filter = params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        
+        cetatenie = params.get('cetatenie')
+        if cetatenie:
+            qs = qs.filter(cetatenie__iexact=cetatenie)
+        
+        # Total
+        total = qs.count()
+        
+        # Pe status
+        from django.db.models import Count
+        by_status = list(
+            qs.values('status')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        
+        # Pe țară/cetățenie
+        by_country = list(
+            qs.values('cetatenie')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:10]
+        )
+        
+        # Pe client
+        by_client = list(
+            qs.filter(client__isnull=False)
+            .values('client__denumire')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:10]
+        )
+        
+        # Liste pentru dropdown-uri de filtre
+        available_statuses = list(
+            Worker.objects.values_list('status', flat=True).distinct().order_by('status')
+        )
+        available_countries = list(
+            Worker.objects.exclude(cetatenie='')
+            .values_list('cetatenie', flat=True)
+            .distinct()
+            .order_by('cetatenie')
+        )
+        
+        return Response({
+            'total': total,
+            'by_status': by_status,
+            'by_country': by_country,
+            'by_client': by_client,
+            'available_statuses': available_statuses,
+            'available_countries': available_countries,
+        })
+
     @action(detail=False, methods=['get'], url_path='bulk-template')
     def bulk_template(self, request):
         """
