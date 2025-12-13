@@ -183,6 +183,13 @@ class WorkerViewSet(viewsets.ModelViewSet):
 
         return qs.order_by("-data_introducere")
 
+    def perform_create(self, serializer):
+        """
+        Setează automat agentul la utilizatorul curent când se creează un lucrător.
+        Aceasta asigură că agenții pot vedea lucrătorii pe care i-au introdus.
+        """
+        serializer.save(agent=self.request.user)
+
     @action(detail=False, methods=['get'], url_path='bulk-template')
     def bulk_template(self, request):
         """
