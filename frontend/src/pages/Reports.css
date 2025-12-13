@@ -7,6 +7,43 @@
   margin: 0 auto;
 }
 
+/* Protecție anti-copy pentru Expert */
+.reports-page.no-copy {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.reports-page.no-copy * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Badge doar vizualizare */
+.view-only-badge {
+  display: inline-block;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: var(--spacing-md);
+}
+
+/* Export restricted message */
+.export-restricted {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
 /* Access Denied */
 .access-denied {
   text-align: center;

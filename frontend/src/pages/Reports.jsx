@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { workersAPI, clientsAPI } from '../services/api'
 import './Reports.css'
 
 /**
- * Pagina de Rapoarte și Statistici - doar Management/Admin
+ * Pagina de Rapoarte și Statistici
+ * - Expert: vizualizare fără export și fără copiere
+ * - Management/Admin: acces complet cu export
  */
 function Reports() {
-  const { isManagementOrAdmin } = useAuth()
+  const { isManagementOrAdmin, isExpertOrAbove, user } = useAuth()
+  const canExport = isManagementOrAdmin() // Doar Management/Admin pot exporta
+  const isExpertOnly = user?.role === 'Expert' // Expert fără drepturi de export
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [statistics, setStatistics] = useState(null)
@@ -198,14 +202,61 @@ function Reports() {
     }
   }
 
-  // Verifică permisiunile
-  if (!isManagementOrAdmin()) {
+  // Protecție anti-copy pentru Expert (dezactivează Ctrl+C, Ctrl+A, click dreapta)
+  const handleKeyDown = useCallback((e) => {
+    if (isExpertOnly) {
+      // Blochează Ctrl+C, Ctrl+A, Ctrl+X, Ctrl+P (print)
+      if (e.ctrlKey && ['c', 'a', 'x', 'p'].includes(e.key.toLowerCase())) {
+        e.preventDefault()
+        return false
+      }
+      // Blochează Cmd+C pe Mac
+      if (e.metaKey && ['c', 'a', 'x', 'p'].includes(e.key.toLowerCase())) {
+        e.preventDefault()
+        return false
+      }
+    }
+  }, [isExpertOnly])
+
+  const handleContextMenu = useCallback((e) => {
+    if (isExpertOnly) {
+      e.preventDefault()
+      return false
+    }
+  }, [isExpertOnly])
+
+  const handleCopy = useCallback((e) => {
+    if (isExpertOnly) {
+      e.preventDefault()
+      return false
+    }
+  }, [isExpertOnly])
+
+  // Adaugă/elimină event listeners pentru protecție anti-copy
+  useEffect(() => {
+    if (isExpertOnly) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.addEventListener('contextmenu', handleContextMenu)
+      document.addEventListener('copy', handleCopy)
+      document.addEventListener('cut', handleCopy)
+      
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        document.removeEventListener('contextmenu', handleContextMenu)
+        document.removeEventListener('copy', handleCopy)
+        document.removeEventListener('cut', handleCopy)
+      }
+    }
+  }, [isExpertOnly, handleKeyDown, handleContextMenu, handleCopy])
+
+  // Verifică permisiunile - Expert sau mai sus poate accesa
+  if (!isExpertOrAbove()) {
     return (
       <div className="reports-page">
         <div className="access-denied card">
           <span className="icon">🔒</span>
           <h2>Acces Restricționat</h2>
-          <p>Această pagină este disponibilă doar pentru Management și Admin.</p>
+          <p>Această pagină este disponibilă doar pentru Expert, Management și Admin.</p>
         </div>
       </div>
     )
@@ -237,11 +288,14 @@ function Reports() {
   }
 
   return (
-    <div className="reports-page">
+    <div className={`reports-page ${isExpertOnly ? 'no-copy' : ''}`}>
       <header className="page-header">
         <div>
           <h1>📊 Rapoarte și Statistici</h1>
-          <p>Dashboard pentru Management</p>
+          <p>Dashboard pentru {user?.role}</p>
+          {isExpertOnly && (
+            <span className="view-only-badge">👁️ Doar vizualizare</span>
+          )}
         </div>
       </header>
 
@@ -515,22 +569,29 @@ function Reports() {
           <div className="results-section">
             <div className="results-header">
               <h3>Rezultate: {workers.length} candidați</h3>
-              <div className="export-buttons">
-                <button 
-                  className="btn btn-success" 
-                  onClick={handleExportExcel}
-                  disabled={exporting}
-                >
-                  📊 Export Excel
-                </button>
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={handleExportPDF}
-                  disabled={exporting}
-                >
-                  📄 Export PDF
-                </button>
-              </div>
+              {/* Butoane export - doar pentru Management/Admin */}
+              {canExport ? (
+                <div className="export-buttons">
+                  <button 
+                    className="btn btn-success" 
+                    onClick={handleExportExcel}
+                    disabled={exporting}
+                  >
+                    📊 Export Excel
+                  </button>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={handleExportPDF}
+                    disabled={exporting}
+                  >
+                    📄 Export PDF
+                  </button>
+                </div>
+              ) : (
+                <span className="export-restricted">
+                  🔒 Export disponibil doar pentru Management
+                </span>
+              )}
             </div>
 
             <div className="card">
