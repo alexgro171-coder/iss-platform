@@ -32,7 +32,7 @@ class ClientSerializer(serializers.ModelSerializer):
 class WorkerDocumentSerializer(serializers.ModelSerializer):
     """Serializer pentru documentele lucrătorilor."""
     document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
-    uploaded_by_username = serializers.CharField(source='uploaded_by.username', read_only=True)
+    uploaded_by_username = serializers.SerializerMethodField()
     
     class Meta:
         model = WorkerDocument
@@ -42,6 +42,10 @@ class WorkerDocumentSerializer(serializers.ModelSerializer):
             'uploaded_by', 'uploaded_by_username', 'file_size'
         ]
         read_only_fields = ('uploaded_at', 'uploaded_by', 'file_size', 'original_filename')
+
+    def get_uploaded_by_username(self, obj):
+        """Returnează username-ul sau None dacă uploaded_by este null."""
+        return obj.uploaded_by.username if obj.uploaded_by else None
 
 
 class WorkerSerializer(serializers.ModelSerializer):
