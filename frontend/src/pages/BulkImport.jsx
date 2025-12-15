@@ -79,6 +79,9 @@ function BulkImport() {
         }
       })
 
+      console.log('Import response:', response.data)
+      console.log('New COR codes:', response.data.new_cor_codes)
+      
       setResults(response.data)
       setFile(null)
       // Reset input
