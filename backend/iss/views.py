@@ -747,6 +747,148 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=False, methods=['get'], url_path='export_excel')
+    def export_excel(self, request):
+        """
+        Export lucrători în format Excel.
+        GET /api/workers/export_excel/?filters...
+        Doar Management/Admin pot exporta.
+        """
+        # Verificăm permisiunile
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+
+        if role not in (UserRole.MANAGEMENT, UserRole.ADMIN):
+            return Response(
+                {'detail': 'Nu aveți permisiunea de a exporta date.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Obținem lucrătorii filtrați
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Aplicăm filtrele din request
+        params = request.query_params
+        if params.get('status'):
+            queryset = queryset.filter(status=params['status'])
+        if params.get('cetatenie'):
+            queryset = queryset.filter(cetatenie__icontains=params['cetatenie'])
+        if params.get('client_id'):
+            queryset = queryset.filter(client_id=params['client_id'])
+        if params.get('cod_cor'):
+            queryset = queryset.filter(cod_cor__icontains=params['cod_cor'])
+        if params.get('nume'):
+            from django.db.models import Q
+            queryset = queryset.filter(Q(nume__icontains=params['nume']) | Q(prenume__icontains=params['nume']))
+        if params.get('luna_wp') and params.get('anul_wp'):
+            queryset = queryset.filter(
+                data_programare_wp__month=params['luna_wp'],
+                data_programare_wp__year=params['anul_wp']
+            )
+        if params.get('luna_viza') and params.get('anul_viza'):
+            queryset = queryset.filter(
+                data_programare_interviu__month=params['luna_viza'],
+                data_programare_interviu__year=params['anul_viza']
+            )
+
+        # Creăm workbook-ul Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Raport Lucrători"
+
+        # Header-uri
+        headers = [
+            'Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Nr. Pașaport', 'Status',
+            'Client', 'Cod COR', 'Data Prog. WP', 'Data Interviu Viză',
+            'Data Nașterii', 'Sex', 'CNP', 'Data Intrare RO', 'Adresa RO'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = openpyxl.styles.Font(bold=True)
+            cell.fill = openpyxl.styles.PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+
+        # Datele
+        for row_idx, worker in enumerate(queryset, 2):
+            ws.cell(row=row_idx, column=1, value=row_idx - 1)
+            ws.cell(row=row_idx, column=2, value=worker.nume)
+            ws.cell(row=row_idx, column=3, value=worker.prenume)
+            ws.cell(row=row_idx, column=4, value=worker.cetatenie or '')
+            ws.cell(row=row_idx, column=5, value=worker.pasaport_nr)
+            ws.cell(row=row_idx, column=6, value=worker.status)
+            ws.cell(row=row_idx, column=7, value=worker.client.denumire if worker.client else '')
+            ws.cell(row=row_idx, column=8, value=worker.cod_cor or '')
+            ws.cell(row=row_idx, column=9, value=str(worker.data_programare_wp) if worker.data_programare_wp else '')
+            ws.cell(row=row_idx, column=10, value=str(worker.data_programare_interviu) if worker.data_programare_interviu else '')
+            ws.cell(row=row_idx, column=11, value=str(worker.data_nasterii) if worker.data_nasterii else '')
+            ws.cell(row=row_idx, column=12, value=worker.sex or '')
+            ws.cell(row=row_idx, column=13, value=worker.cnp or '')
+            ws.cell(row=row_idx, column=14, value=str(worker.data_intrare_ro) if worker.data_intrare_ro else '')
+            ws.cell(row=row_idx, column=15, value=worker.adresa_ro or '')
+
+        # Ajustăm lățimea coloanelor
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 40)
+            ws.column_dimensions[column].width = adjusted_width
+
+        # Salvăm în buffer
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename=raport_lucratori_{queryset.count()}.xlsx'
+        
+        # Logăm exportul
+        ActivityLog.log(
+            log_type=LogType.ACTIVITY,
+            action=LogAction.EXPORT,
+            user=request.user,
+            details={'message': f'Export Excel: {queryset.count()} lucrători', 'format': 'excel'},
+            request=request
+        )
+        
+        return response
+
+    @action(detail=False, methods=['get'], url_path='export_pdf')
+    def export_pdf(self, request):
+        """
+        Export lucrători în format PDF (pentru moment, returnăm un mesaj).
+        GET /api/workers/export_pdf/?filters...
+        """
+        # Verificăm permisiunile
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+
+        if role not in (UserRole.MANAGEMENT, UserRole.ADMIN):
+            return Response(
+                {'detail': 'Nu aveți permisiunea de a exporta date.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Pentru PDF avem nevoie de o bibliotecă suplimentară (reportlab)
+        # Deocamdată returnăm Excel cu extensia pdf ca placeholder
+        return Response(
+            {'detail': 'Export PDF în dezvoltare. Folosiți Export Excel.'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+
 
 class WorkerDocumentViewSet(viewsets.ModelViewSet):
     """ViewSet pentru gestionarea documentelor lucrătorilor."""
