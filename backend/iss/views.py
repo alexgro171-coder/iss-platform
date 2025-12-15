@@ -867,9 +867,16 @@ class WorkerViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='export_pdf')
     def export_pdf(self, request):
         """
-        Export lucrători în format PDF (pentru moment, returnăm un mesaj).
+        Export lucrători în format PDF.
         GET /api/workers/export_pdf/?filters...
+        Doar Management/Admin pot exporta.
         """
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        
         # Verificăm permisiunile
         try:
             role = request.user.profile.role
@@ -882,12 +889,117 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Pentru PDF avem nevoie de o bibliotecă suplimentară (reportlab)
-        # Deocamdată returnăm Excel cu extensia pdf ca placeholder
-        return Response(
-            {'detail': 'Export PDF în dezvoltare. Folosiți Export Excel.'},
-            status=status.HTTP_501_NOT_IMPLEMENTED
+        # Obținem lucrătorii filtrați
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # Aplicăm filtrele din request
+        params = request.query_params
+        if params.get('status'):
+            queryset = queryset.filter(status=params['status'])
+        if params.get('cetatenie'):
+            queryset = queryset.filter(cetatenie__icontains=params['cetatenie'])
+        if params.get('client_id'):
+            queryset = queryset.filter(client_id=params['client_id'])
+        if params.get('cod_cor'):
+            queryset = queryset.filter(cod_cor__icontains=params['cod_cor'])
+        if params.get('nume'):
+            from django.db.models import Q
+            queryset = queryset.filter(Q(nume__icontains=params['nume']) | Q(prenume__icontains=params['nume']))
+
+        # Creăm PDF-ul
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=landscape(A4),
+            leftMargin=1*cm,
+            rightMargin=1*cm,
+            topMargin=1*cm,
+            bottomMargin=1*cm
         )
+        
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Titlu
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=20,
+            alignment=1  # Center
+        )
+        elements.append(Paragraph(f"Raport Lucrători - {queryset.count()} înregistrări", title_style))
+        elements.append(Spacer(1, 12))
+        
+        # Header-uri tabel
+        headers = ['Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Status', 'Client']
+        
+        # Datele
+        data = [headers]
+        for idx, worker in enumerate(queryset[:100], 1):  # Limităm la 100 pentru PDF
+            data.append([
+                str(idx),
+                worker.nume or '',
+                worker.prenume or '',
+                worker.cetatenie or '-',
+                worker.pasaport_nr or '',
+                worker.status or '-',
+                worker.client.denumire if worker.client else '-'
+            ])
+        
+        # Creăm tabelul
+        col_widths = [1*cm, 3*cm, 3*cm, 2.5*cm, 3*cm, 4*cm, 4*cm]
+        table = Table(data, colWidths=col_widths)
+        
+        # Stilul tabelului
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#366092')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')]),
+        ]))
+        
+        elements.append(table)
+        
+        # Nota dacă sunt mai mult de 100
+        if queryset.count() > 100:
+            note_style = ParagraphStyle(
+                'Note',
+                parent=styles['Normal'],
+                fontSize=8,
+                textColor=colors.grey,
+                spaceBefore=10
+            )
+            elements.append(Paragraph(
+                f"* Se afișează primele 100 din {queryset.count()} înregistrări. Pentru lista completă, folosiți Export Excel.",
+                note_style
+            ))
+        
+        # Generăm PDF-ul
+        doc.build(elements)
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename=raport_lucratori_{queryset.count()}.pdf'
+        
+        # Logăm exportul
+        ActivityLog.log(
+            log_type=LogType.ACTIVITY,
+            action=LogAction.EXPORT,
+            user=request.user,
+            details={'message': f'Export PDF: {queryset.count()} lucrători', 'format': 'pdf'},
+            request=request
+        )
+        
+        return response
 
 
 class WorkerDocumentViewSet(viewsets.ModelViewSet):
