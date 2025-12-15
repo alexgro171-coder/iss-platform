@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import api from '../services/api'
 import './BulkImport.css'
 
 /**
@@ -12,20 +13,20 @@ function BulkImport() {
   const [uploading, setUploading] = useState(false)
   const [results, setResults] = useState(null)
   const [error, setError] = useState('')
+  const [downloading, setDownloading] = useState(false)
 
   // Descarcă template
   const handleDownloadTemplate = async () => {
+    setDownloading(true)
+    setError('')
     try {
-      const token = localStorage.getItem('access_token')
-      const response = await fetch('/api/workers/bulk-template/', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await api.get('/workers/bulk-template/', {
+        responseType: 'blob'
       })
       
-      if (!response.ok) {
-        throw new Error('Eroare la descărcarea template-ului')
-      }
-      
-      const blob = await response.blob()
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -35,7 +36,10 @@ function BulkImport() {
       a.remove()
       window.URL.revokeObjectURL(url)
     } catch (error) {
-      setError(error.message)
+      console.error('Download template error:', error)
+      setError(error.response?.data?.detail || error.message || 'Eroare la descărcarea template-ului')
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -69,27 +73,19 @@ function BulkImport() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const token = localStorage.getItem('access_token')
-      const response = await fetch('/api/workers/bulk-import/', {
-        method: 'POST',
+      const response = await api.post('/workers/bulk-import/', formData, {
         headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
+          'Content-Type': 'multipart/form-data'
+        }
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Eroare la import')
-      }
-
-      setResults(data)
+      setResults(response.data)
       setFile(null)
       // Reset input
       document.getElementById('file-input').value = ''
     } catch (error) {
-      setError(error.message)
+      console.error('Import error:', error)
+      setError(error.response?.data?.detail || error.message || 'Eroare la import')
     } finally {
       setUploading(false)
     }
@@ -136,8 +132,19 @@ function BulkImport() {
         </ol>
         
         <div className="template-download">
-          <button className="btn btn-primary" onClick={handleDownloadTemplate}>
-            📄 Descarcă Template Excel
+          <button 
+            className="btn btn-primary" 
+            onClick={handleDownloadTemplate}
+            disabled={downloading}
+          >
+            {downloading ? (
+              <>
+                <span className="spinner"></span>
+                Se descarcă...
+              </>
+            ) : (
+              '📄 Descarcă Template Excel'
+            )}
           </button>
         </div>
       </div>
