@@ -542,12 +542,16 @@ class WorkerViewSet(viewsets.ModelViewSet):
             # Debug: returnăm headers detectate dacă nu avem datele corecte
             detected_headers = [h for h in headers if h]
             
+            # Tracking pentru coduri COR nou create
+            new_cor_codes = []
+            
             results = {
                 'total': 0,
                 'success': 0,
                 'errors': 0,
                 'details': [],
                 'debug_headers': detected_headers[:15],  # Primele 15 headers pentru debug
+                'new_cor_codes': [],  # Coduri COR noi adăugate
             }
 
             # Procesăm fiecare rând (începând de la 2 pentru a sări header-ul)
@@ -643,6 +647,24 @@ class WorkerViewSet(viewsets.ModelViewSet):
                             return default
                         return str(val).strip()
                     
+                    # Verificăm și procesăm Cod COR
+                    cod_cor_value = get_str('cod_cor')
+                    cod_cor_ref = None
+                    if cod_cor_value:
+                        # Căutăm codul COR în nomenclator
+                        cod_cor_ref = CodCOR.objects.filter(cod=cod_cor_value).first()
+                        if not cod_cor_ref:
+                            # Codul COR nu există - îl creăm
+                            cod_cor_ref = CodCOR.objects.create(
+                                cod=cod_cor_value,
+                                denumire_ro='[De completat]',
+                                denumire_en='[To be completed]',
+                                activ=True
+                            )
+                            # Adăugăm la lista de coduri noi (dacă nu există deja)
+                            if cod_cor_value not in new_cor_codes:
+                                new_cor_codes.append(cod_cor_value)
+                    
                     # Creăm lucrătorul
                     worker = Worker.objects.create(
                         nume=get_str('nume'),
@@ -660,7 +682,8 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         data_solicitare_wp=parse_date_value(row_data.get('data_solicitare_wp')),
                         data_programare_wp=parse_date_value(row_data.get('data_programare_wp')),
                         judet_wp=get_str('judet_wp'),
-                        cod_cor=get_str('cod_cor'),
+                        cod_cor=cod_cor_value,
+                        cod_cor_ref=cod_cor_ref,  # Legătură la nomenclatorul CodCOR
                         data_solicitare_viza=parse_date_value(row_data.get('data_solicitare_viza')),
                         data_programare_interviu=parse_date_value(row_data.get('data_programare_interviu')),
                         status=get_str('status') or 'Aviz solicitat',
@@ -697,6 +720,9 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         'message': str(e)
                     })
 
+            # Adăugăm codurile COR noi la rezultate
+            results['new_cor_codes'] = new_cor_codes
+            
             # Logăm importul
             ActivityLog.log(
                 log_type=LogType.ACTIVITY,
@@ -708,6 +734,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
                     'success': results['success'],
                     'errors': results['errors'],
                     'filename': file.name,
+                    'new_cor_codes': new_cor_codes,
                 },
                 request=request
             )

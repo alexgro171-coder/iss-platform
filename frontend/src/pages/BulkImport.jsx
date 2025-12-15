@@ -262,6 +262,30 @@ function BulkImport() {
               </a>
             </div>
           )}
+
+          {/* Avertizare pentru coduri COR noi */}
+          {results.new_cor_codes && results.new_cor_codes.length > 0 && (
+            <div className="warning-message new-cor-warning">
+              <div className="warning-header">
+                <span className="warning-icon">⚠️</span>
+                <strong>Atenție: Coduri COR noi adăugate!</strong>
+              </div>
+              <p>
+                Următoarele coduri COR au fost adăugate automat în nomenclator, dar necesită 
+                completarea denumirilor în română și engleză:
+              </p>
+              <div className="new-cor-codes-list">
+                {results.new_cor_codes.map((code, index) => (
+                  <span key={index} className="cor-code-badge">{code}</span>
+                ))}
+              </div>
+              <div className="warning-actions">
+                <a href="/coduri-cor" className="btn btn-warning">
+                  📝 Completează Codurile COR
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
