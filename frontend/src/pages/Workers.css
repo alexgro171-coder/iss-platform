@@ -101,6 +101,10 @@
   border-color: var(--accent-primary);
 }
 
+.btn-icon.danger {
+  color: var(--text-secondary);
+}
+
 .btn-icon.danger:hover {
   background: rgba(239, 68, 68, 0.1);
   color: var(--accent-danger);
