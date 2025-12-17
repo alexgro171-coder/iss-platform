@@ -317,7 +317,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
             'nume', 'prenume', 'pasaport_nr', 'cetatenie', 'stare_civila',
             'copii_intretinere', 'sex', 'data_nasterii', 'oras_domiciliu',
             'data_emitere_pass', 'data_exp_pass', 'autoritate_emitenta_pasaport',
-            'dosar_wp_nr', 'data_solicitare_wp', 'data_programare_wp', 'judet_wp', 'cod_cor',
+            'dosar_wp_nr', 'data_solicitare_wp', 'data_programare_wp', 'judet_wp', 'cod_cor', 'functie',
             'data_solicitare_viza', 'data_programare_interviu', 'status',
             'cnp', 'data_intrare_ro', 'cim_nr', 'data_emitere_cim',
             'data_depunere_ps', 'data_programare_ps', 'data_emitere_ps',
@@ -336,7 +336,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
             'Popescu', 'Ion', 'AB123456', 'Nepal', 'M',
             0, 'M', '1990-01-15', 'Kathmandu',
             '2023-01-01', '2033-01-01', 'Ministerul Afacerilor Interne',
-            'WP-001', '2024-01-01', '2024-02-01', 'București', '721401',
+            'WP-001', '2024-01-01', '2024-02-01', 'București', '721401', 'Muncitor necalificat',
             '2024-02-15', '2024-03-01', 'Aviz solicitat',
             '', '', '', '',
             '', '', '', '',
@@ -508,6 +508,14 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         # Cod COR
                         'cod_cor': 'cod_cor',
                         'cor': 'cod_cor',
+                        # Funcție
+                        'functie': 'functie',
+                        'funcție': 'functie',
+                        'function': 'functie',
+                        'job_title': 'functie',
+                        'ocupatie': 'functie',
+                        'ocupație': 'functie',
+                        'post': 'functie',
                         # Viză
                         'data_solicitare_viza': 'data_solicitare_viza',
                         'data_solicitare_viză': 'data_solicitare_viza',
@@ -695,6 +703,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
                         judet_wp=get_str('judet_wp'),
                         cod_cor=cod_cor_value,
                         cod_cor_ref=cod_cor_ref,  # Legătură la nomenclatorul CodCOR
+                        functie=get_str('functie'),
                         data_solicitare_viza=parse_date_value(row_data.get('data_solicitare_viza')),
                         data_programare_interviu=parse_date_value(row_data.get('data_programare_interviu')),
                         status=get_str('status') or 'Aviz solicitat',

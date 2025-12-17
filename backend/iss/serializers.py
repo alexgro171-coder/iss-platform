@@ -82,8 +82,7 @@ class WorkerSerializer(serializers.ModelSerializer):
         return obj.cod_cor_ref.denumire_en if obj.cod_cor_ref else None
 
     def validate(self, attrs):
-        """Validări custom pentru câmpurile autoritate_emitenta_pasaport și funcție."""
-        request = self.context.get('request')
+        """Validări custom pentru câmpul autoritate_emitenta_pasaport."""
         instance = self.instance  # None la creare, obiect la update
         
         # Validare autoritate_emitenta_pasaport - obligatoriu la creare
@@ -93,29 +92,6 @@ class WorkerSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'autoritate_emitenta_pasaport': 'Autoritatea emitentă a pașaportului este obligatorie.'
                 })
-        
-        # Validare câmp funcție
-        if request and 'functie' in attrs:
-            try:
-                from .models import UserProfile, UserRole
-                role = request.user.profile.role
-            except (UserProfile.DoesNotExist, AttributeError):
-                role = None
-            
-            # Agentul NU poate seta câmpul funcție
-            if role == UserRole.AGENT:
-                # Eliminăm câmpul funcție dacă agentul încearcă să îl seteze
-                attrs.pop('functie', None)
-            else:
-                # Expert/Management/Admin pot seta funcția doar pentru statusuri eligibile
-                status = attrs.get('status') or (instance.status if instance else None)
-                STATUSES_ALLOW_FUNCTIE = ['Sosit cu CIM semnat', 'Activ', 'Suspendat', 'Inactiv']
-                
-                functie_value = attrs.get('functie', '')
-                if functie_value and status not in STATUSES_ALLOW_FUNCTIE:
-                    raise serializers.ValidationError({
-                        'functie': f'Câmpul "Funcție" poate fi completat doar pentru statusurile: {", ".join(STATUSES_ALLOW_FUNCTIE)}'
-                    })
         
         return attrs
 

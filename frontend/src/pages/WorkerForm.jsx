@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { workersAPI, clientsAPI, workerDocumentsAPI, coduriCORAPI } from '../services/api'
-import { useAuth } from '../context/AuthContext'
 import './WorkerForm.css'
 
 /**
@@ -10,16 +9,7 @@ import './WorkerForm.css'
 function WorkerForm() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
   const isEditing = Boolean(id)
-  
-  // Rolul utilizatorului curent
-  const userRole = user?.role || 'Agent'
-  const isAgent = userRole === 'Agent'
-  const isExpertOrAbove = ['Expert', 'Management', 'Admin'].includes(userRole)
-  
-  // Statusuri care permit editarea câmpului Funcție
-  const STATUSES_ALLOW_FUNCTIE = ['Sosit cu CIM semnat', 'Activ', 'Suspendat', 'Inactiv']
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -78,7 +68,7 @@ function WorkerForm() {
     data_intrare_ro: '',
     cim_nr: '',
     data_emitere_cim: '',
-    functie: '',  // Câmp nou - completabil doar după sosire
+    functie: '',
     data_emitere_ps: '',
     data_expirare_ps: '',
     adresa_ro: '',
@@ -564,30 +554,17 @@ function WorkerForm() {
               />
             </div>
             
-            {/* Câmp Funcție - vizibil doar pentru Expert/Management/Admin */}
-            {isExpertOrAbove && (
-              <div className="form-group">
-                <label>
-                  Funcție
-                  {!STATUSES_ALLOW_FUNCTIE.includes(formData.status) && (
-                    <span className="field-locked"> 🔒</span>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  name="functie"
-                  value={formData.functie}
-                  onChange={handleChange}
-                  placeholder="Funcția după semnarea CIM"
-                  disabled={!STATUSES_ALLOW_FUNCTIE.includes(formData.status)}
-                />
-                {!STATUSES_ALLOW_FUNCTIE.includes(formData.status) && (
-                  <small className="help-text warning">
-                    Completabil doar pentru statusuri: {STATUSES_ALLOW_FUNCTIE.join(', ')}
-                  </small>
-                )}
-              </div>
-            )}
+            {/* Câmp Funcție - vizibil pentru toate rolurile */}
+            <div className="form-group">
+              <label>Funcție</label>
+              <input
+                type="text"
+                name="functie"
+                value={formData.functie}
+                onChange={handleChange}
+                placeholder="Funcția/ocupația lucrătorului"
+              />
+            </div>
             
             <div className="form-group full-width">
               <label>Adresă în România</label>
