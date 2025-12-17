@@ -106,6 +106,11 @@ class Worker(models.Model):
     pasaport_nr = models.CharField(max_length=20, unique=True)
     data_emitere_pass = models.DateField(null=True, blank=True)
     data_exp_pass = models.DateField(null=True, blank=True)
+    autoritate_emitenta_pasaport = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Autoritatea care a emis pașaportul (obligatoriu la recrutare)"
+    )
 
     oras_domiciliu = models.CharField(max_length=100, blank=True)
 
@@ -167,6 +172,11 @@ class Worker(models.Model):
     data_intrare_ro = models.DateField(null=True, blank=True)
     cim_nr = models.CharField(max_length=50, blank=True)
     data_emitere_cim = models.DateField(null=True, blank=True)
+    functie = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Funcția/ocupația după semnarea CIM (completabil doar după sosire)"
+    )
     data_emitere_ps = models.DateField(null=True, blank=True)
     data_expirare_ps = models.DateField(null=True, blank=True)
     adresa_ro = models.CharField(max_length=255, blank=True)

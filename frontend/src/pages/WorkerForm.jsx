@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { workersAPI, clientsAPI, workerDocumentsAPI, coduriCORAPI } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import './WorkerForm.css'
 
 /**
@@ -9,7 +10,16 @@ import './WorkerForm.css'
 function WorkerForm() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const isEditing = Boolean(id)
+  
+  // Rolul utilizatorului curent
+  const userRole = user?.role || 'Agent'
+  const isAgent = userRole === 'Agent'
+  const isExpertOrAbove = ['Expert', 'Management', 'Admin'].includes(userRole)
+  
+  // Statusuri care permit editarea câmpului Funcție
+  const STATUSES_ALLOW_FUNCTIE = ['Sosit cu CIM semnat', 'Activ', 'Suspendat', 'Inactiv']
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -52,6 +62,7 @@ function WorkerForm() {
     pasaport_nr: '',
     data_emitere_pass: '',
     data_exp_pass: '',
+    autoritate_emitenta_pasaport: '',  // Câmp nou - obligatoriu la recrutare
     oras_domiciliu: '',
     cod_cor: '',
     dosar_wp_nr: '',
@@ -67,6 +78,7 @@ function WorkerForm() {
     data_intrare_ro: '',
     cim_nr: '',
     data_emitere_cim: '',
+    functie: '',  // Câmp nou - completabil doar după sosire
     data_emitere_ps: '',
     data_expirare_ps: '',
     adresa_ro: '',
@@ -103,12 +115,14 @@ function WorkerForm() {
           stare_civila: worker.stare_civila || '',
           sex: worker.sex || '',
           pasaport_nr: worker.pasaport_nr || '',
+          autoritate_emitenta_pasaport: worker.autoritate_emitenta_pasaport || '',
           oras_domiciliu: worker.oras_domiciliu || '',
           cod_cor: worker.cod_cor || '',
           dosar_wp_nr: worker.dosar_wp_nr || '',
           judet_wp: worker.judet_wp || '',
           cnp: worker.cnp || '',
           cim_nr: worker.cim_nr || '',
+          functie: worker.functie || '',
           adresa_ro: worker.adresa_ro || '',
           observatii: worker.observatii || '',
           copii_intretinere: worker.copii_intretinere || 0,
@@ -391,6 +405,18 @@ function WorkerForm() {
                 onChange={handleChange}
               />
             </div>
+            <div className="form-group">
+              <label>Autoritatea emitentă pașaport {!isEditing && '*'}</label>
+              <input
+                type="text"
+                name="autoritate_emitenta_pasaport"
+                value={formData.autoritate_emitenta_pasaport}
+                onChange={handleChange}
+                placeholder="ex: MAI România, Ambasada..."
+                required={!isEditing}
+              />
+              <small className="help-text">Obligatoriu la introducerea candidatului</small>
+            </div>
           </div>
         </section>
 
@@ -537,6 +563,32 @@ function WorkerForm() {
                 onChange={handleChange}
               />
             </div>
+            
+            {/* Câmp Funcție - vizibil doar pentru Expert/Management/Admin */}
+            {isExpertOrAbove && (
+              <div className="form-group">
+                <label>
+                  Funcție
+                  {!STATUSES_ALLOW_FUNCTIE.includes(formData.status) && (
+                    <span className="field-locked"> 🔒</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  name="functie"
+                  value={formData.functie}
+                  onChange={handleChange}
+                  placeholder="Funcția după semnarea CIM"
+                  disabled={!STATUSES_ALLOW_FUNCTIE.includes(formData.status)}
+                />
+                {!STATUSES_ALLOW_FUNCTIE.includes(formData.status) && (
+                  <small className="help-text warning">
+                    Completabil doar pentru statusuri: {STATUSES_ALLOW_FUNCTIE.join(', ')}
+                  </small>
+                )}
+              </div>
+            )}
+            
             <div className="form-group full-width">
               <label>Adresă în România</label>
               <input

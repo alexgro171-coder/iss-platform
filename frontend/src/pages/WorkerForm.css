@@ -82,6 +82,32 @@
   min-height: 80px;
 }
 
+/* Help text styling */
+.help-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.help-text.warning {
+  color: var(--accent-warning, #f59e0b);
+}
+
+/* Locked field indicator */
+.field-locked {
+  font-size: 0.875rem;
+  margin-left: 4px;
+}
+
+/* Disabled input styling */
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: var(--bg-elevated);
+}
+
 /* Actions */
 .form-actions {
   display: flex;

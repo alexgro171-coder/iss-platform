@@ -94,6 +94,7 @@ export function AuthProvider({ children }) {
         'Editare date lucrători',
         'Upload documente',
         'Schimbare status',
+        'Autoritate emitentă pașaport (obligatoriu)',
       ],
       Expert: [
         'Vizualizare toți lucrătorii',
@@ -103,6 +104,7 @@ export function AuthProvider({ children }) {
         'Vizualizare rapoarte',
         'Generare template-uri',
         'Filtre avansate (8 criterii)',
+        'Completare câmp Funcție (după sosire)',
       ],
       Management: [
         'Acces complet lucrători',
@@ -111,6 +113,7 @@ export function AuthProvider({ children }) {
         'Import bulk lucrători',
         'Generare template-uri',
         'Ștergere înregistrări',
+        'Completare câmp Funcție',
       ],
       Admin: [
         'Acces complet sistem',
