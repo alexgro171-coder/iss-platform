@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('iss', '0002_add_telefon_to_userprofile'),
+        ('iss', '0007_codcor_alter_worker_cod_cor_worker_cod_cor_ref'),
     ]
 
     operations = [
