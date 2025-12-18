@@ -10,12 +10,12 @@ from openpyxl import Workbook
 
 from .models import (
     Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction,
-    WorkerDocument, CodCOR, TemplateDocument, GeneratedDocument, TemplateType
+    WorkerDocument, CodCOR, TemplateDocument, GeneratedDocument, TemplateType, Ambasada
 )
 from .serializers import (
     ClientSerializer, WorkerSerializer, CurrentUserSerializer,
     WorkerDocumentSerializer, CodCORSerializer, TemplateDocumentSerializer,
-    GeneratedDocumentSerializer, GenerateDocumentRequestSerializer
+    GeneratedDocumentSerializer, GenerateDocumentRequestSerializer, AmbasadaSerializer
 )
 
 
@@ -126,6 +126,37 @@ class CodCORViewSet(viewsets.ModelViewSet):
             )
         
         return queryset.order_by('cod')
+
+
+class AmbasadaViewSet(viewsets.ModelViewSet):
+    """
+    CRUD pentru nomenclatorul Ambasade.
+    - GET (listare): toți utilizatorii autentificați
+    - POST/PUT/DELETE: doar Management/Admin (prin Django Admin)
+    """
+    queryset = Ambasada.objects.all().order_by('denumire')
+    serializer_class = AmbasadaSerializer
+    permission_classes = [IsManagementOrReadOnly]
+
+    def get_queryset(self):
+        """Filtrare opțională după status activ."""
+        queryset = Ambasada.objects.all()
+        
+        # Filtru doar ambasade active (implicit pentru dropdown-uri)
+        activ = self.request.query_params.get('activ')
+        if activ is not None:
+            queryset = queryset.filter(activ=activ.lower() == 'true')
+        
+        # Căutare după denumire sau țară
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                models.Q(denumire__icontains=search) |
+                models.Q(tara__icontains=search) |
+                models.Q(oras__icontains=search)
+            )
+        
+        return queryset.order_by('denumire')
 
 
 class WorkerViewSet(viewsets.ModelViewSet):
@@ -1111,6 +1142,12 @@ class TemplateDocumentViewSet(viewsets.ModelViewSet):
             'data_solicitare_viza': format_date(worker.data_solicitare_viza),
             'data_programare_interviu': format_date(worker.data_programare_interviu),
             
+            # Ambasadă
+            'ambasada': worker.ambasada.denumire if worker.ambasada else '',
+            'ambasada_denumire': worker.ambasada.denumire if worker.ambasada else '',
+            'ambasada_tara': worker.ambasada.tara if worker.ambasada else '',
+            'ambasada_oras': worker.ambasada.oras if worker.ambasada else '',
+            
             # Status
             'status': worker.status or '',
             
@@ -1279,6 +1316,9 @@ class TemplateDocumentViewSet(viewsets.ModelViewSet):
             'viza': [
                 {'key': 'data_solicitare_viza', 'description': 'Data solicitării vizei'},
                 {'key': 'data_programare_interviu', 'description': 'Data programării interviu'},
+                {'key': 'ambasada', 'description': 'Denumirea ambasadei'},
+                {'key': 'ambasada_tara', 'description': 'Țara ambasadei'},
+                {'key': 'ambasada_oras', 'description': 'Orașul ambasadei'},
             ],
             'romania': [
                 {'key': 'cnp', 'description': 'CNP'},

@@ -205,6 +205,27 @@ export const coduriCORAPI = {
 }
 
 // ============================================
+// AMBASADE API
+// ============================================
+
+export const ambasadeAPI = {
+  // Listare toate ambasadele
+  getAll: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    if (params.activ !== undefined) queryParams.append('activ', params.activ)
+    if (params.search) queryParams.append('search', params.search)
+    const response = await api.get(`/ambasade/?${queryParams}`)
+    return response.data
+  },
+
+  // Obține o ambasadă
+  getById: async (id) => {
+    const response = await api.get(`/ambasade/${id}/`)
+    return response.data
+  },
+}
+
+// ============================================
 // WORKER DOCUMENTS API
 // ============================================
 

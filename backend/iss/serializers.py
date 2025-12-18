@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
     Client, Worker, UserProfile, WorkerDocument, CodCOR,
-    TemplateDocument, GeneratedDocument, TemplateType
+    TemplateDocument, GeneratedDocument, TemplateType, Ambasada
 )
 
 
@@ -40,6 +40,14 @@ class CodCORSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
+class AmbasadaSerializer(serializers.ModelSerializer):
+    """Serializer pentru nomenclatorul Ambasade."""
+    class Meta:
+        model = Ambasada
+        fields = ['id', 'denumire', 'tara', 'oras', 'activ', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
 class WorkerDocumentSerializer(serializers.ModelSerializer):
     """Serializer pentru documentele lucrătorilor."""
     document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
@@ -66,6 +74,9 @@ class WorkerSerializer(serializers.ModelSerializer):
     # Informații CodCOR pentru afișare
     cod_cor_denumire_ro = serializers.SerializerMethodField()
     cod_cor_denumire_en = serializers.SerializerMethodField()
+    
+    # Informații Ambasadă pentru afișare
+    ambasada_denumire = serializers.SerializerMethodField()
 
     class Meta:
         model = Worker
@@ -83,6 +94,10 @@ class WorkerSerializer(serializers.ModelSerializer):
     def get_cod_cor_denumire_en(self, obj):
         """Returnează denumirea COR în engleză sau None."""
         return obj.cod_cor_ref.denumire_en if obj.cod_cor_ref else None
+
+    def get_ambasada_denumire(self, obj):
+        """Returnează denumirea ambasadei sau None."""
+        return obj.ambasada.denumire if obj.ambasada else None
 
     def validate(self, attrs):
         """Validări custom pentru câmpul autoritate_emitenta_pasaport."""

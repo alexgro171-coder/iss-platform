@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.http import HttpResponseRedirect
 from .models import (
     Client, Worker, UserProfile, ActivityLog, WorkerDocument, CodCOR,
-    TemplateDocument, GeneratedDocument, TemplateType
+    TemplateDocument, GeneratedDocument, TemplateType, Ambasada
 )
 
 
@@ -16,11 +16,11 @@ class ClientAdmin(admin.ModelAdmin):
 
 @admin.register(Worker)
 class WorkerAdmin(admin.ModelAdmin):
-    list_display = ("nume", "prenume", "cetatenie", "status", "pasaport_nr", "client", "agent", "expert")
+    list_display = ("nume", "prenume", "cetatenie", "status", "pasaport_nr", "client", "ambasada", "agent", "expert")
     search_fields = ("nume", "prenume", "pasaport_nr", "cetatenie")
-    list_filter = ("status", "cetatenie", "client", "agent", "expert")
+    list_filter = ("status", "cetatenie", "client", "ambasada", "agent", "expert")
     ordering = ("nume", "prenume")
-    autocomplete_fields = ["client", "agent", "expert"]
+    autocomplete_fields = ["client", "agent", "expert", "ambasada"]
 
 
 @admin.register(UserProfile)
@@ -45,6 +45,25 @@ class CodCORAdmin(admin.ModelAdmin):
     search_fields = ("cod", "denumire_ro", "denumire_en")
     list_editable = ("activ",)
     ordering = ("cod",)
+
+
+@admin.register(Ambasada)
+class AmbasadaAdmin(admin.ModelAdmin):
+    """Admin pentru gestionarea nomenclatorului de Ambasade."""
+    list_display = ("denumire", "tara", "oras", "activ", "updated_at")
+    list_filter = ("activ", "tara")
+    search_fields = ("denumire", "tara", "oras")
+    list_editable = ("activ",)
+    ordering = ("denumire",)
+    
+    fieldsets = (
+        ('Informații Ambasadă', {
+            'fields': ('denumire', 'tara', 'oras')
+        }),
+        ('Status', {
+            'fields': ('activ',)
+        }),
+    )
 
 
 @admin.register(ActivityLog)

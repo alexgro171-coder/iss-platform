@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { workersAPI, clientsAPI, workerDocumentsAPI, coduriCORAPI } from '../services/api'
+import { workersAPI, clientsAPI, workerDocumentsAPI, coduriCORAPI, ambasadeAPI } from '../services/api'
 import './WorkerForm.css'
 
 /**
@@ -16,6 +16,7 @@ function WorkerForm() {
   const [error, setError] = useState('')
   const [clients, setClients] = useState([])
   const [coduriCOR, setCoduriCOR] = useState([])
+  const [ambasade, setAmbasade] = useState([])
   
   // State pentru documente
   const [documents, setDocuments] = useState([])
@@ -61,6 +62,7 @@ function WorkerForm() {
     judet_wp: '',
     data_solicitare_viza: '',
     data_programare_interviu: '',
+    ambasada: '',
     status: 'Aviz solicitat',
     data_depunere_ps: '',
     data_programare_ps: '',
@@ -83,13 +85,15 @@ function WorkerForm() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Încarcă lista de clienți și coduri COR
-      const [clientsData, coduriData] = await Promise.all([
+      // Încarcă lista de clienți, coduri COR și ambasade
+      const [clientsData, coduriData, ambasadeData] = await Promise.all([
         clientsAPI.getAll(),
-        coduriCORAPI.getAll({ activ: true })
+        coduriCORAPI.getAll({ activ: true }),
+        ambasadeAPI.getAll({ activ: true })
       ])
       setClients(clientsData)
       setCoduriCOR(coduriData)
+      setAmbasade(ambasadeData)
 
       // Dacă editează, încarcă datele lucrătorului
       if (isEditing) {
@@ -110,6 +114,7 @@ function WorkerForm() {
           cod_cor: worker.cod_cor || '',
           dosar_wp_nr: worker.dosar_wp_nr || '',
           judet_wp: worker.judet_wp || '',
+          ambasada: worker.ambasada || '',
           cnp: worker.cnp || '',
           cim_nr: worker.cim_nr || '',
           functie: worker.functie || '',
@@ -157,6 +162,13 @@ function WorkerForm() {
         dataToSend.client = null
       } else {
         dataToSend.client = parseInt(dataToSend.client)
+      }
+      
+      // Convertește ambasada la număr sau null
+      if (dataToSend.ambasada === '') {
+        dataToSend.ambasada = null
+      } else {
+        dataToSend.ambasada = parseInt(dataToSend.ambasada)
       }
 
       // Elimină câmpurile goale de date
@@ -489,6 +501,22 @@ function WorkerForm() {
         <section className="form-section">
           <h2>Viză</h2>
           <div className="form-grid">
+            <div className="form-group">
+              <label>Ambasada</label>
+              <select 
+                name="ambasada" 
+                value={formData.ambasada || ''} 
+                onChange={handleChange}
+              >
+                <option value="">Selectează ambasada</option>
+                {ambasade.map(amb => (
+                  <option key={amb.id} value={amb.id}>
+                    {amb.denumire}
+                    {amb.tara && ` (${amb.tara})`}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="form-group">
               <label>Data solicitare viză</label>
               <input

@@ -36,6 +36,10 @@ function Templates() {
   // State pentru placeholder-uri
   const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [placeholders, setPlaceholders] = useState({})
+  
+  // State pentru documentul generat și modal de acțiuni
+  const [generatedDoc, setGeneratedDoc] = useState(null)
+  const [showDocActions, setShowDocActions] = useState(false)
 
   // Încărcare date inițiale
   useEffect(() => {
@@ -69,7 +73,7 @@ function Templates() {
     )
   })
 
-  // Handler pentru generare document
+  // Handler pentru generare document - afișează modal cu opțiuni
   const handleGenerate = async () => {
     if (!selectedType || !selectedWorker) {
       alert('Te rog selectează tipul de document și un lucrător.')
@@ -85,36 +89,77 @@ function Templates() {
     setError(null)
 
     try {
-      const response = await templatesAPI.generate(
-        selectedType.value,
-        selectedWorker.id,
-        outputFormat
-      )
+      // Generăm ambele formate pentru flexibilitate
+      const [responseDocx, responsePdf] = await Promise.all([
+        templatesAPI.generate(selectedType.value, selectedWorker.id, 'docx'),
+        templatesAPI.generate(selectedType.value, selectedWorker.id, 'pdf')
+      ])
 
-      // Descărcăm fișierul
-      const blob = new Blob([response.data], { 
-        type: outputFormat === 'pdf' 
-          ? 'application/pdf' 
-          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+      // Creăm blob-urile
+      const blobDocx = new Blob([responseDocx.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
       })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${selectedType.value}_${selectedWorker.nume}_${selectedWorker.prenume}.${outputFormat}`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      a.remove()
+      const blobPdf = new Blob([responsePdf.data], { 
+        type: 'application/pdf' 
+      })
 
-      // Resetare selecție
-      setSelectedWorker(null)
-      setWorkerSearch('')
+      // Salvăm în state pentru acțiuni ulterioare
+      setGeneratedDoc({
+        blobDocx,
+        blobPdf,
+        urlDocx: window.URL.createObjectURL(blobDocx),
+        urlPdf: window.URL.createObjectURL(blobPdf),
+        filename: `${selectedType.value}_${selectedWorker.nume}_${selectedWorker.prenume}`,
+        templateLabel: selectedType.label,
+        workerName: `${selectedWorker.nume} ${selectedWorker.prenume}`
+      })
+      
+      // Afișăm modal-ul cu opțiuni
+      setShowDocActions(true)
       
     } catch (err) {
       setError('Eroare la generarea documentului: ' + (err.response?.data?.detail || err.message))
     } finally {
       setGenerating(false)
     }
+  }
+
+  // Handler pentru descărcare document
+  const handleDownload = (format) => {
+    if (!generatedDoc) return
+    
+    const url = format === 'pdf' ? generatedDoc.urlPdf : generatedDoc.urlDocx
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${generatedDoc.filename}.${format}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
+  // Handler pentru print document (deschide PDF în fereastră nouă pentru print)
+  const handlePrint = () => {
+    if (!generatedDoc) return
+    
+    // Deschidem PDF-ul într-o fereastră nouă și declanșăm print
+    const printWindow = window.open(generatedDoc.urlPdf, '_blank')
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print()
+      }
+    }
+  }
+
+  // Închide modal-ul și curăță resursele
+  const handleCloseDocActions = () => {
+    if (generatedDoc) {
+      window.URL.revokeObjectURL(generatedDoc.urlDocx)
+      window.URL.revokeObjectURL(generatedDoc.urlPdf)
+    }
+    setGeneratedDoc(null)
+    setShowDocActions(false)
+    setSelectedWorker(null)
+    setWorkerSearch('')
   }
 
   // Handler pentru upload template
@@ -517,6 +562,70 @@ function Templates() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Acțiuni Document Generat */}
+      {showDocActions && generatedDoc && (
+        <div className="modal-overlay" onClick={handleCloseDocActions}>
+          <div className="modal-content doc-actions-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header success-header">
+              <h3>✅ Document Generat cu Succes!</h3>
+              <button className="modal-close" onClick={handleCloseDocActions}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="doc-info">
+                <div className="doc-icon">📄</div>
+                <div className="doc-details">
+                  <p className="doc-title">{generatedDoc.templateLabel}</p>
+                  <p className="doc-worker">Pentru: <strong>{generatedDoc.workerName}</strong></p>
+                </div>
+              </div>
+
+              <div className="doc-actions-grid">
+                <button 
+                  className="doc-action-btn print-btn"
+                  onClick={handlePrint}
+                >
+                  <span className="action-icon">🖨️</span>
+                  <span className="action-label">Tipărește</span>
+                  <span className="action-desc">Deschide pentru printare</span>
+                </button>
+
+                <button 
+                  className="doc-action-btn download-word-btn"
+                  onClick={() => handleDownload('docx')}
+                >
+                  <span className="action-icon">📘</span>
+                  <span className="action-label">Descarcă Word</span>
+                  <span className="action-desc">.docx - editabil</span>
+                </button>
+
+                <button 
+                  className="doc-action-btn download-pdf-btn"
+                  onClick={() => handleDownload('pdf')}
+                >
+                  <span className="action-icon">📕</span>
+                  <span className="action-label">Descarcă PDF</span>
+                  <span className="action-desc">.pdf - format fix</span>
+                </button>
+              </div>
+
+              <div className="doc-preview-section">
+                <p className="preview-label">Previzualizare PDF:</p>
+                <iframe 
+                  src={generatedDoc.urlPdf} 
+                  className="doc-preview-iframe"
+                  title="Previzualizare document"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={handleCloseDocActions}>
+                Închide
+              </button>
             </div>
           </div>
         </div>

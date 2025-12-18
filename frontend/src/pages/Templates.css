@@ -648,3 +648,159 @@
   }
 }
 
+/* ============================================
+   Document Actions Modal
+   ============================================ */
+
+.doc-actions-modal {
+  max-width: 700px;
+}
+
+.success-header {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+  border-bottom: 2px solid rgba(16, 185, 129, 0.3);
+}
+
+.success-header h3 {
+  color: #10b981;
+}
+
+.doc-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.doc-icon {
+  font-size: 3rem;
+}
+
+.doc-details {
+  flex: 1;
+}
+
+.doc-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.doc-worker {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.doc-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.doc-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.doc-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.doc-action-btn .action-icon {
+  font-size: 2.5rem;
+}
+
+.doc-action-btn .action-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.doc-action-btn .action-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Print Button */
+.print-btn {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.print-btn:hover {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* Download Word Button */
+.download-word-btn {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.download-word-btn:hover {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* Download PDF Button */
+.download-pdf-btn {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.download-pdf-btn:hover {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Preview Section */
+.doc-preview-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--spacing-lg);
+}
+
+.preview-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-md);
+}
+
+.doc-preview-iframe {
+  width: 100%;
+  height: 300px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: white;
+}
+
+/* Responsive for Document Actions Modal */
+@media (max-width: 600px) {
+  .doc-actions-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .doc-info {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .doc-preview-iframe {
+    height: 200px;
+  }
+}
+

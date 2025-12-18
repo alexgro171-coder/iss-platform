@@ -47,6 +47,42 @@ class Client(models.Model):
         return self.denumire
 
 
+class Ambasada(models.Model):
+    """
+    Nomenclator Ambasade pentru selectare în formularul lucrătorului.
+    Administrat din Django Admin.
+    """
+    denumire = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="Denumirea ambasadei (ex: Ambasada României la Kathmandu)"
+    )
+    tara = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Țara în care se află ambasada"
+    )
+    oras = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Orașul în care se află ambasada"
+    )
+    activ = models.BooleanField(
+        default=True,
+        help_text="Dacă ambasada este activă și poate fi selectată"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Ambasadă"
+        verbose_name_plural = "Ambasade"
+        ordering = ['denumire']
+
+    def __str__(self):
+        return self.denumire
+
+
 class CodCOR(models.Model):
     """
     Nomenclator Coduri COR (Clasificarea Ocupațiilor din România).
@@ -156,6 +192,16 @@ class Worker(models.Model):
     # Viză
     data_solicitare_viza = models.DateField(null=True, blank=True)
     data_programare_interviu = models.DateField(null=True, blank=True)
+    
+    # Ambasada pentru procesul de viză
+    ambasada = models.ForeignKey(
+        'Ambasada',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='workers',
+        help_text="Ambasada unde se depune cererea de viză"
+    )
 
     status = models.CharField(
         max_length=40,
