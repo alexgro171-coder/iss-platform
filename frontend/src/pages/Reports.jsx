@@ -571,22 +571,22 @@ function Reports() {
               <h3>Rezultate: {workers.length} candidați</h3>
               {/* Butoane export - doar pentru Management/Admin */}
               {canExport ? (
-                <div className="export-buttons">
-                  <button 
-                    className="btn btn-success" 
-                    onClick={handleExportExcel}
-                    disabled={exporting}
-                  >
-                    📊 Export Excel
-                  </button>
-                  <button 
-                    className="btn btn-secondary" 
-                    onClick={handleExportPDF}
-                    disabled={exporting}
-                  >
-                    📄 Export PDF
-                  </button>
-                </div>
+              <div className="export-buttons">
+                <button 
+                  className="btn btn-success" 
+                  onClick={handleExportExcel}
+                  disabled={exporting}
+                >
+                  📊 Export Excel
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleExportPDF}
+                  disabled={exporting}
+                >
+                  📄 Export PDF
+                </button>
+              </div>
               ) : (
                 <span className="export-restricted">
                   🔒 Export disponibil doar pentru Management

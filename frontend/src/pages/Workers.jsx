@@ -163,9 +163,9 @@ function Workers() {
           <button className="btn btn-secondary" onClick={() => alert('Export PDF - în dezvoltare')}>
             📄 Export PDF
           </button>
-          <Link to="/workers/new" className="btn btn-primary">
-            + Adaugă Lucrător
-          </Link>
+        <Link to="/workers/new" className="btn btn-primary">
+          + Adaugă Lucrător
+        </Link>
         </div>
       </header>
 
