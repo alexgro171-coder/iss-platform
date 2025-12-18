@@ -244,6 +244,121 @@ class WorkerDocument(models.Model):
         return f"{self.get_document_type_display()} - {self.original_filename}"
 
 
+def template_document_path(instance, filename):
+    """Generează calea pentru template-uri: templates/{template_type}/{filename}"""
+    return f'templates/{instance.template_type}/{filename}'
+
+
+class TemplateType(models.TextChoices):
+    """Tipuri fixe de template-uri documente"""
+    CERERE_WORK_PERMIT = "cerere_work_permit", "Cerere Work Permit"
+    OFERTA_ANGAJARE = "oferta_angajare", "Ofertă de Angajare"
+    SCRISOARE_GARANTIE = "scrisoare_garantie", "Scrisoare de Garanție"
+    DECLARATIE = "declaratie", "Declarație"
+    CIM = "cim", "Contract Individual de Muncă (CIM)"
+
+
+class TemplateDocument(models.Model):
+    """
+    Model pentru stocarea template-urilor de documente.
+    Fiecare tip de template poate avea un singur fișier activ.
+    """
+    template_type = models.CharField(
+        max_length=30,
+        choices=TemplateType.choices,
+        db_index=True,
+        help_text="Tipul de template"
+    )
+    file = models.FileField(
+        upload_to=template_document_path,
+        help_text="Fișier Word (.docx)"
+    )
+    original_filename = models.CharField(max_length=255)
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Dacă acest template este activ"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="uploaded_templates",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Descriere sau note despre acest template"
+    )
+
+    class Meta:
+        verbose_name = "Template Document"
+        verbose_name_plural = "Template-uri Documente"
+        ordering = ['template_type', '-uploaded_at']
+
+    def __str__(self):
+        status = "✔️ Activ" if self.is_active else "❌ Inactiv"
+        return f"{self.get_template_type_display()} ({status})"
+
+    def save(self, *args, **kwargs):
+        # Dacă acest template este setat ca activ, dezactivăm celelalte de același tip
+        if self.is_active:
+            TemplateDocument.objects.filter(
+                template_type=self.template_type,
+                is_active=True
+            ).exclude(pk=self.pk).update(is_active=False)
+        super().save(*args, **kwargs)
+
+
+class GeneratedDocument(models.Model):
+    """
+    Log pentru documentele generate - pentru audit.
+    """
+    template = models.ForeignKey(
+        TemplateDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="generated_documents"
+    )
+    template_type = models.CharField(
+        max_length=30,
+        choices=TemplateType.choices,
+        help_text="Tip template (păstrat și dacă template-ul este șters)"
+    )
+    worker = models.ForeignKey(
+        'Worker',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="generated_documents"
+    )
+    worker_name = models.CharField(
+        max_length=150,
+        help_text="Nume lucrător (păstrat pentru istoric)"
+    )
+    generated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="generated_docs"
+    )
+    generated_by_username = models.CharField(max_length=150)
+    generated_at = models.DateTimeField(auto_now_add=True)
+    output_format = models.CharField(
+        max_length=10,
+        choices=[('docx', 'Word'), ('pdf', 'PDF')],
+        default='docx'
+    )
+
+    class Meta:
+        verbose_name = "Document Generat"
+        verbose_name_plural = "Documente Generate"
+        ordering = ['-generated_at']
+
+    def __str__(self):
+        return f"{self.get_template_type_display()} - {self.worker_name} ({self.generated_at.strftime('%Y-%m-%d')})"
+
+
 class LogType(models.TextChoices):
     SYSTEM = "SYSTEM", "Sistem"
     AUTH = "AUTH", "Autentificare"

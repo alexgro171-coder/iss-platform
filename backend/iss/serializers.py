@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Client, Worker, UserProfile, WorkerDocument, CodCOR
+from .models import (
+    Client, Worker, UserProfile, WorkerDocument, CodCOR,
+    TemplateDocument, GeneratedDocument, TemplateType
+)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -94,4 +97,83 @@ class WorkerSerializer(serializers.ModelSerializer):
                 })
         
         return attrs
+
+
+class TemplateDocumentSerializer(serializers.ModelSerializer):
+    """Serializer pentru template-uri documente."""
+    template_type_display = serializers.CharField(
+        source='get_template_type_display', read_only=True
+    )
+    uploaded_by_username = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TemplateDocument
+        fields = [
+            'id', 'template_type', 'template_type_display', 'file', 'file_url',
+            'original_filename', 'is_active', 'uploaded_at', 'updated_at',
+            'uploaded_by', 'uploaded_by_username', 'description'
+        ]
+        read_only_fields = ('uploaded_at', 'updated_at', 'uploaded_by')
+
+    def get_uploaded_by_username(self, obj):
+        return obj.uploaded_by.username if obj.uploaded_by else None
+
+    def get_file_url(self, obj):
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
+
+
+class GeneratedDocumentSerializer(serializers.ModelSerializer):
+    """Serializer pentru istoricul documentelor generate."""
+    template_type_display = serializers.CharField(
+        source='get_template_type_display', read_only=True
+    )
+
+    class Meta:
+        model = GeneratedDocument
+        fields = [
+            'id', 'template_type', 'template_type_display', 'worker',
+            'worker_name', 'generated_by', 'generated_by_username',
+            'generated_at', 'output_format'
+        ]
+        read_only_fields = '__all__'
+
+
+class TemplateTypeSerializer(serializers.Serializer):
+    """Serializer pentru listarea tipurilor de template-uri disponibile."""
+    value = serializers.CharField()
+    label = serializers.CharField()
+    has_active_template = serializers.BooleanField()
+    active_template_id = serializers.IntegerField(allow_null=True)
+
+
+class GenerateDocumentRequestSerializer(serializers.Serializer):
+    """Serializer pentru request-ul de generare document."""
+    template_type = serializers.ChoiceField(choices=TemplateType.choices)
+    worker_id = serializers.IntegerField()
+    output_format = serializers.ChoiceField(
+        choices=[('docx', 'Word'), ('pdf', 'PDF')],
+        default='docx'
+    )
+
+    def validate_worker_id(self, value):
+        try:
+            Worker.objects.get(pk=value)
+        except Worker.DoesNotExist:
+            raise serializers.ValidationError("Lucrătorul nu există.")
+        return value
+
+    def validate_template_type(self, value):
+        if not TemplateDocument.objects.filter(
+            template_type=value, is_active=True
+        ).exists():
+            raise serializers.ValidationError(
+                f"Nu există un template activ pentru tipul '{value}'."
+            )
+        return value
 

@@ -243,6 +243,69 @@ export const workerDocumentsAPI = {
 }
 
 // ============================================
+// TEMPLATES API
+// ============================================
+
+export const templatesAPI = {
+  // Listare tipuri de template-uri cu status
+  getTypes: async () => {
+    const response = await api.get('/templates/types/')
+    return response.data
+  },
+
+  // Listare template-uri
+  getAll: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    if (params.template_type) queryParams.append('template_type', params.template_type)
+    if (params.active_only !== undefined) queryParams.append('active_only', params.active_only)
+    const response = await api.get(`/templates/?${queryParams}`)
+    return response.data
+  },
+
+  // Upload template nou
+  upload: async (templateType, file, description = '') => {
+    const formData = new FormData()
+    formData.append('template_type', templateType)
+    formData.append('file', file)
+    formData.append('description', description)
+
+    const response = await api.post('/templates/upload/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  // Generare document
+  generate: async (templateType, workerId, outputFormat = 'docx') => {
+    const response = await api.post('/templates/generate/', {
+      template_type: templateType,
+      worker_id: workerId,
+      output_format: outputFormat,
+    }, {
+      responseType: 'blob',  // Important pentru descărcare fișier
+    })
+    return response
+  },
+
+  // Istoric documente generate
+  getHistory: async () => {
+    const response = await api.get('/templates/history/')
+    return response.data
+  },
+
+  // Lista placeholder-uri
+  getPlaceholders: async () => {
+    const response = await api.get('/templates/placeholders/')
+    return response.data
+  },
+
+  // Șterge template
+  delete: async (id) => {
+    await api.delete(`/templates/${id}/`)
+  },
+}
+
+// ============================================
 // ECO-FIN API (Microserviciu Profitabilitate)
 // ============================================
 

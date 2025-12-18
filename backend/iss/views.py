@@ -8,8 +8,15 @@ from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 
-from .models import Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction, WorkerDocument, CodCOR
-from .serializers import ClientSerializer, WorkerSerializer, CurrentUserSerializer, WorkerDocumentSerializer, CodCORSerializer
+from .models import (
+    Client, Worker, UserProfile, UserRole, ActivityLog, LogType, LogAction,
+    WorkerDocument, CodCOR, TemplateDocument, GeneratedDocument, TemplateType
+)
+from .serializers import (
+    ClientSerializer, WorkerSerializer, CurrentUserSerializer,
+    WorkerDocumentSerializer, CodCORSerializer, TemplateDocumentSerializer,
+    GeneratedDocumentSerializer, GenerateDocumentRequestSerializer
+)
 
 
 @api_view(["GET"])
@@ -827,3 +834,476 @@ class WorkerDocumentViewSet(viewsets.ModelViewSet):
             instance.file.delete(save=False)
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class IsExpertOrAbove(permissions.BasePermission):
+    """
+    Permite acces doar pentru Expert, Management sau Admin.
+    Agentul NU are acces.
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            return False
+        return role in (UserRole.EXPERT, UserRole.MANAGEMENT, UserRole.ADMIN)
+
+
+class TemplateDocumentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet pentru gestionarea template-urilor de documente.
+    Acces: Expert, Management, Admin
+    """
+    queryset = TemplateDocument.objects.all()
+    serializer_class = TemplateDocumentSerializer
+    permission_classes = [IsExpertOrAbove]
+
+    def get_queryset(self):
+        """Filtrare template-uri."""
+        queryset = TemplateDocument.objects.all()
+        
+        # Filtrare după tip
+        template_type = self.request.query_params.get('template_type')
+        if template_type:
+            queryset = queryset.filter(template_type=template_type)
+        
+        # Filtrare doar active
+        active_only = self.request.query_params.get('active_only', 'true')
+        if active_only.lower() == 'true':
+            queryset = queryset.filter(is_active=True)
+        
+        return queryset.select_related('uploaded_by')
+
+    @action(detail=False, methods=['get'], url_path='types')
+    def list_types(self, request):
+        """
+        Listează toate tipurile de template-uri disponibile
+        cu status-ul lor (are sau nu template activ).
+        """
+        types = []
+        for value, label in TemplateType.choices:
+            active_template = TemplateDocument.objects.filter(
+                template_type=value, is_active=True
+            ).first()
+            types.append({
+                'value': value,
+                'label': label,
+                'has_active_template': active_template is not None,
+                'active_template_id': active_template.id if active_template else None,
+            })
+        return Response(types)
+
+    @action(detail=False, methods=['post'], url_path='upload')
+    def upload_template(self, request):
+        """
+        Upload un nou template.
+        Dezactivează automat template-ul anterior de același tip.
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response(
+                {'detail': 'Fișierul este obligatoriu.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validare extensie
+        if not file.name.endswith('.docx'):
+            return Response(
+                {'detail': 'Doar fișiere .docx sunt acceptate.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        template_type = request.data.get('template_type')
+        if not template_type:
+            return Response(
+                {'detail': 'template_type este obligatoriu.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validare tip template
+        valid_types = [t[0] for t in TemplateType.choices]
+        if template_type not in valid_types:
+            return Response(
+                {'detail': f'Tip template invalid. Valori acceptate: {valid_types}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Creăm template-ul (save() va dezactiva automat pe celălalt)
+        template = TemplateDocument.objects.create(
+            template_type=template_type,
+            file=file,
+            original_filename=file.name,
+            is_active=True,
+            uploaded_by=request.user,
+            description=request.data.get('description', ''),
+        )
+        
+        # Log
+        ActivityLog.log(
+            log_type=LogType.ACTIVITY,
+            action=LogAction.UPLOAD,
+            user=request.user,
+            target=template,
+            details={
+                'message': f'Template încărcat: {template.get_template_type_display()}',
+                'filename': file.name,
+            },
+            request=request
+        )
+        
+        serializer = self.get_serializer(template)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='generate')
+    def generate_document(self, request):
+        """
+        Generează un document pe baza unui template și datelor unui lucrător.
+        Înlocuiește placeholder-ele cu date reale.
+        """
+        from docx import Document as DocxDocument
+        import re
+        
+        serializer = GenerateDocumentRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        template_type = serializer.validated_data['template_type']
+        worker_id = serializer.validated_data['worker_id']
+        output_format = serializer.validated_data['output_format']
+        
+        # Obținem template-ul activ
+        template = TemplateDocument.objects.filter(
+            template_type=template_type, is_active=True
+        ).first()
+        
+        if not template:
+            return Response(
+                {'detail': 'Nu există template activ pentru acest tip.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Obținem lucrătorul cu toate relațiile
+        worker = Worker.objects.select_related('client', 'cod_cor_ref').get(pk=worker_id)
+        
+        # Construim maparea placeholder-elor
+        placeholder_map = self._build_placeholder_map(worker)
+        
+        # Încărcăm documentul Word
+        try:
+            doc = DocxDocument(template.file.path)
+        except Exception as e:
+            return Response(
+                {'detail': f'Eroare la încărcarea template-ului: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Înlocuim placeholder-ele în paragrafe
+        for paragraph in doc.paragraphs:
+            self._replace_placeholders_in_paragraph(paragraph, placeholder_map)
+        
+        # Înlocuim placeholder-ele în tabele
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        self._replace_placeholders_in_paragraph(paragraph, placeholder_map)
+        
+        # Salvăm documentul în buffer
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        # Salvăm în istoricul documentelor generate
+        GeneratedDocument.objects.create(
+            template=template,
+            template_type=template_type,
+            worker=worker,
+            worker_name=f"{worker.nume} {worker.prenume}",
+            generated_by=request.user,
+            generated_by_username=request.user.username,
+            output_format=output_format,
+        )
+        
+        # Log
+        ActivityLog.log(
+            log_type=LogType.ACTIVITY,
+            action=LogAction.DOWNLOAD,
+            user=request.user,
+            target=worker,
+            details={
+                'message': f'Document generat: {template.get_template_type_display()}',
+                'template_id': template.id,
+                'output_format': output_format,
+            },
+            request=request
+        )
+        
+        # Generăm răspunsul
+        if output_format == 'pdf':
+            # Conversie la PDF
+            pdf_buffer = self._convert_to_pdf(buffer)
+            if pdf_buffer:
+                response = HttpResponse(
+                    pdf_buffer.getvalue(),
+                    content_type='application/pdf'
+                )
+                filename = f"{template_type}_{worker.nume}_{worker.prenume}.pdf"
+            else:
+                # Dacă conversia la PDF eșuează, returnăm Word
+                response = HttpResponse(
+                    buffer.getvalue(),
+                    content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                )
+                filename = f"{template_type}_{worker.nume}_{worker.prenume}.docx"
+        else:
+            response = HttpResponse(
+                buffer.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+            filename = f"{template_type}_{worker.nume}_{worker.prenume}.docx"
+        
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    def _build_placeholder_map(self, worker):
+        """Construiește maparea dintre placeholder-e și valori."""
+        
+        def format_date(date_val):
+            if date_val:
+                return date_val.strftime('%d.%m.%Y')
+            return ''
+        
+        # Date lucrător
+        placeholder_map = {
+            # Date personale
+            'nume': worker.nume or '',
+            'prenume': worker.prenume or '',
+            'nume_complet': f"{worker.nume} {worker.prenume}".strip(),
+            'cetatenie': worker.cetatenie or '',
+            'stare_civila': worker.stare_civila or '',
+            'copii_intretinere': str(worker.copii_intretinere),
+            'sex': worker.sex or '',
+            'data_nasterii': format_date(worker.data_nasterii),
+            'oras_domiciliu': worker.oras_domiciliu or '',
+            
+            # Pașaport
+            'pasaport_nr': worker.pasaport_nr or '',
+            'nr_pasaport': worker.pasaport_nr or '',
+            'data_emitere_pass': format_date(worker.data_emitere_pass),
+            'data_exp_pass': format_date(worker.data_exp_pass),
+            'data_expirare_pasaport': format_date(worker.data_exp_pass),
+            'autoritate_emitenta_pasaport': worker.autoritate_emitenta_pasaport or '',
+            
+            # Work Permit
+            'dosar_wp_nr': worker.dosar_wp_nr or '',
+            'data_solicitare_wp': format_date(worker.data_solicitare_wp),
+            'data_programare_wp': format_date(worker.data_programare_wp),
+            'judet_wp': worker.judet_wp or '',
+            
+            # Cod COR
+            'cod_cor': worker.cod_cor or '',
+            'cod_cor_denumire_ro': worker.cod_cor_ref.denumire_ro if worker.cod_cor_ref else '',
+            'cod_cor_denumire_en': worker.cod_cor_ref.denumire_en if worker.cod_cor_ref else '',
+            'functie': worker.functie or '',
+            
+            # Viză
+            'data_solicitare_viza': format_date(worker.data_solicitare_viza),
+            'data_programare_interviu': format_date(worker.data_programare_interviu),
+            
+            # Status
+            'status': worker.status or '',
+            
+            # România
+            'cnp': worker.cnp or '',
+            'data_intrare_ro': format_date(worker.data_intrare_ro),
+            'cim_nr': worker.cim_nr or '',
+            'data_emitere_cim': format_date(worker.data_emitere_cim),
+            'data_depunere_ps': format_date(worker.data_depunere_ps),
+            'data_programare_ps': format_date(worker.data_programare_ps),
+            'data_emitere_ps': format_date(worker.data_emitere_ps),
+            'data_expirare_ps': format_date(worker.data_expirare_ps),
+            'adresa_ro': worker.adresa_ro or '',
+            
+            # Observații
+            'observatii': worker.observatii or '',
+        }
+        
+        # Date client
+        if worker.client:
+            placeholder_map.update({
+                'client_denumire': worker.client.denumire or '',
+                'client_tara': worker.client.tara or '',
+                'client_oras': worker.client.oras or '',
+                'client_judet': worker.client.judet or '',
+                'client_adresa': worker.client.adresa or '',
+                'client_cod_fiscal': worker.client.cod_fiscal or '',
+            })
+        else:
+            placeholder_map.update({
+                'client_denumire': '',
+                'client_tara': '',
+                'client_oras': '',
+                'client_judet': '',
+                'client_adresa': '',
+                'client_cod_fiscal': '',
+            })
+        
+        return placeholder_map
+
+    def _replace_placeholders_in_paragraph(self, paragraph, placeholder_map):
+        """Înlocuiește placeholder-ele <field> într-un paragraf."""
+        import re
+        
+        # Combinăm tot textul din runs pentru a detecta placeholder-e
+        full_text = ''.join(run.text for run in paragraph.runs)
+        
+        # Găsim toate placeholder-ele
+        placeholders = re.findall(r'<([a-z_]+)>', full_text)
+        
+        if not placeholders:
+            return
+        
+        # Înlocuim în textul complet
+        for ph in placeholders:
+            value = placeholder_map.get(ph, '')
+            full_text = full_text.replace(f'<{ph}>', value)
+        
+        # Ștergem runs existente și adăugăm textul nou
+        if paragraph.runs:
+            # Păstrăm formatarea primului run
+            first_run = paragraph.runs[0]
+            for run in paragraph.runs[1:]:
+                run.text = ''
+            first_run.text = full_text
+
+    def _convert_to_pdf(self, docx_buffer):
+        """
+        Convertește documentul Word la PDF.
+        Returnează None dacă conversia eșuează.
+        """
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.pdfgen import canvas
+            from docx import Document as DocxDocument
+            
+            # Re-încărcăm documentul din buffer
+            docx_buffer.seek(0)
+            doc = DocxDocument(docx_buffer)
+            
+            pdf_buffer = BytesIO()
+            c = canvas.Canvas(pdf_buffer, pagesize=A4)
+            width, height = A4
+            
+            y_position = height - 50
+            line_height = 14
+            
+            for paragraph in doc.paragraphs:
+                text = paragraph.text
+                if text.strip():
+                    # Wrap text dacă e prea lung
+                    words = text.split()
+                    current_line = ""
+                    
+                    for word in words:
+                        test_line = current_line + " " + word if current_line else word
+                        if len(test_line) * 7 > width - 100:  # Aproximare simplă
+                            c.drawString(50, y_position, current_line)
+                            y_position -= line_height
+                            current_line = word
+                        else:
+                            current_line = test_line
+                    
+                    if current_line:
+                        c.drawString(50, y_position, current_line)
+                        y_position -= line_height
+                
+                y_position -= 5  # Spațiu între paragrafe
+                
+                # Pagină nouă dacă e nevoie
+                if y_position < 50:
+                    c.showPage()
+                    y_position = height - 50
+            
+            c.save()
+            pdf_buffer.seek(0)
+            return pdf_buffer
+            
+        except Exception as e:
+            print(f"Eroare la conversia PDF: {e}")
+            return None
+
+    @action(detail=False, methods=['get'], url_path='history')
+    def generation_history(self, request):
+        """Returnează istoricul documentelor generate."""
+        history = GeneratedDocument.objects.select_related(
+            'template', 'worker', 'generated_by'
+        ).order_by('-generated_at')[:100]
+        
+        serializer = GeneratedDocumentSerializer(history, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='placeholders')
+    def list_placeholders(self, request):
+        """Listează toate placeholder-ele disponibile pentru template-uri."""
+        placeholders = {
+            'date_personale': [
+                {'key': 'nume', 'description': 'Numele lucrătorului'},
+                {'key': 'prenume', 'description': 'Prenumele lucrătorului'},
+                {'key': 'nume_complet', 'description': 'Numele și prenumele'},
+                {'key': 'cetatenie', 'description': 'Cetățenia'},
+                {'key': 'stare_civila', 'description': 'Starea civilă (M/NM)'},
+                {'key': 'copii_intretinere', 'description': 'Numărul de copii în întreținere'},
+                {'key': 'sex', 'description': 'Sexul (M/F)'},
+                {'key': 'data_nasterii', 'description': 'Data nașterii'},
+                {'key': 'oras_domiciliu', 'description': 'Orașul de domiciliu'},
+            ],
+            'pasaport': [
+                {'key': 'pasaport_nr', 'description': 'Numărul pașaportului'},
+                {'key': 'data_emitere_pass', 'description': 'Data emiterii pașaportului'},
+                {'key': 'data_exp_pass', 'description': 'Data expirării pașaportului'},
+                {'key': 'autoritate_emitenta_pasaport', 'description': 'Autoritatea emitentă'},
+            ],
+            'work_permit': [
+                {'key': 'dosar_wp_nr', 'description': 'Număr dosar Work Permit'},
+                {'key': 'data_solicitare_wp', 'description': 'Data solicitării WP'},
+                {'key': 'data_programare_wp', 'description': 'Data programării WP'},
+                {'key': 'judet_wp', 'description': 'Județul WP'},
+            ],
+            'ocupatie': [
+                {'key': 'cod_cor', 'description': 'Codul COR'},
+                {'key': 'cod_cor_denumire_ro', 'description': 'Denumirea COR în română'},
+                {'key': 'cod_cor_denumire_en', 'description': 'Denumirea COR în engleză'},
+                {'key': 'functie', 'description': 'Funcția'},
+            ],
+            'viza': [
+                {'key': 'data_solicitare_viza', 'description': 'Data solicitării vizei'},
+                {'key': 'data_programare_interviu', 'description': 'Data programării interviu'},
+            ],
+            'romania': [
+                {'key': 'cnp', 'description': 'CNP'},
+                {'key': 'data_intrare_ro', 'description': 'Data intrării în România'},
+                {'key': 'cim_nr', 'description': 'Număr CIM'},
+                {'key': 'data_emitere_cim', 'description': 'Data emiterii CIM'},
+                {'key': 'adresa_ro', 'description': 'Adresa din România'},
+            ],
+            'permis_sedere': [
+                {'key': 'data_depunere_ps', 'description': 'Data depunerii PS'},
+                {'key': 'data_programare_ps', 'description': 'Data programării PS'},
+                {'key': 'data_emitere_ps', 'description': 'Data emiterii PS'},
+                {'key': 'data_expirare_ps', 'description': 'Data expirării PS'},
+            ],
+            'client': [
+                {'key': 'client_denumire', 'description': 'Denumirea clientului'},
+                {'key': 'client_tara', 'description': 'Țara clientului'},
+                {'key': 'client_oras', 'description': 'Orașul clientului'},
+                {'key': 'client_judet', 'description': 'Județul clientului'},
+                {'key': 'client_adresa', 'description': 'Adresa clientului'},
+                {'key': 'client_cod_fiscal', 'description': 'Codul fiscal al clientului'},
+            ],
+            'altele': [
+                {'key': 'status', 'description': 'Status lucrător'},
+                {'key': 'observatii', 'description': 'Observații'},
+            ],
+        }
+        return Response(placeholders)
