@@ -987,6 +987,342 @@ def report_interval(request):
     })
 
 
+# ==========================================
+# RAPOARTE FINANCIARE (REST PLATĂ, REȚINERI)
+# ==========================================
+
+@api_view(['GET'])
+@permission_classes([IsManagementOrAdmin])
+def report_rest_plata_total(request):
+    """
+    GET /api/eco-fin/report/rest-plata/
+    Raport total rest de plată către lucrătorii activi.
+    
+    Parametri:
+    - year (obligatoriu)
+    - month (opțional - dacă nu e specificat, toate lunile din an)
+    """
+    year = request.query_params.get('year')
+    month = request.query_params.get('month')
+    
+    if not year:
+        return Response({'detail': 'Year este obligatoriu.'}, status=400)
+    
+    qs = EcoFinProcessedRecord.objects.filter(year=int(year))
+    if month:
+        qs = qs.filter(month=int(month))
+    
+    # Totaluri generale
+    totals = qs.aggregate(
+        total_workers=Count('id'),
+        total_rest_plata=Sum('rest_plata'),
+        total_retineri=Sum('retineri'),
+        total_net=Sum('net'),
+        total_brut=Sum('salariu_brut'),
+        total_cam=Sum('cam')
+    )
+    
+    # Per lună (pentru grafic)
+    per_month = list(
+        qs.values('year', 'month')
+        .annotate(
+            workers_count=Count('id'),
+            rest_plata=Sum('rest_plata'),
+            retineri=Sum('retineri'),
+            net=Sum('net')
+        )
+        .order_by('year', 'month')
+    )
+    
+    # Detalii per lucrător (primele 100)
+    workers_detail = list(
+        qs.values(
+            'worker__id', 'worker__nume', 'worker__prenume', 
+            'worker__pasaport_nr', 'nr_cim'
+        )
+        .annotate(
+            total_rest_plata=Sum('rest_plata'),
+            total_retineri=Sum('retineri'),
+            total_net=Sum('net'),
+            months_count=Count('id')
+        )
+        .order_by('-total_rest_plata')[:100]
+    )
+    
+    return Response({
+        'year': int(year),
+        'month': int(month) if month else None,
+        'totals': {
+            'total_workers': totals['total_workers'] or 0,
+            'total_rest_plata': float(totals['total_rest_plata'] or 0),
+            'total_retineri': float(totals['total_retineri'] or 0),
+            'total_net': float(totals['total_net'] or 0),
+            'total_brut': float(totals['total_brut'] or 0),
+            'total_cam': float(totals['total_cam'] or 0)
+        },
+        'per_month': per_month,
+        'workers': workers_detail
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsManagementOrAdmin])
+def report_rest_plata_by_client(request):
+    """
+    GET /api/eco-fin/report/rest-plata-client/
+    Raport rest de plată către lucrătorii activi grupat pe client.
+    
+    Parametri:
+    - year (obligatoriu)
+    - month (opțional)
+    - client_id (opțional - pentru detalii pe un singur client)
+    """
+    year = request.query_params.get('year')
+    month = request.query_params.get('month')
+    client_id = request.query_params.get('client_id')
+    
+    if not year:
+        return Response({'detail': 'Year este obligatoriu.'}, status=400)
+    
+    qs = EcoFinProcessedRecord.objects.filter(year=int(year))
+    if month:
+        qs = qs.filter(month=int(month))
+    if client_id:
+        qs = qs.filter(client_id=int(client_id))
+    
+    # Per client
+    clients_data = list(
+        qs.values('client__id', 'client__denumire')
+        .annotate(
+            workers_count=Count('id'),
+            total_rest_plata=Sum('rest_plata'),
+            total_retineri=Sum('retineri'),
+            total_net=Sum('net'),
+            total_brut=Sum('salariu_brut')
+        )
+        .order_by('-total_rest_plata')
+    )
+    
+    # Totaluri
+    total_rest_plata_all = sum(c['total_rest_plata'] or 0 for c in clients_data)
+    
+    # Calculăm procentele
+    for c in clients_data:
+        c['rest_plata_share_percent'] = (
+            float((c['total_rest_plata'] / total_rest_plata_all) * 100)
+            if total_rest_plata_all > 0 else 0
+        )
+    
+    # Dacă avem client_id, adăugăm detalii per lucrător
+    workers_detail = []
+    if client_id:
+        workers_detail = list(
+            qs.values(
+                'worker__id', 'worker__nume', 'worker__prenume',
+                'worker__pasaport_nr', 'nr_cim', 'month'
+            )
+            .annotate(
+                rest_plata=Sum('rest_plata'),
+                retineri=Sum('retineri'),
+                net=Sum('net')
+            )
+            .order_by('worker__nume', 'month')
+        )
+    
+    return Response({
+        'year': int(year),
+        'month': int(month) if month else None,
+        'client_id': int(client_id) if client_id else None,
+        'clients': clients_data,
+        'workers_detail': workers_detail,
+        'totals': {
+            'total_clients': len(clients_data),
+            'total_rest_plata': float(total_rest_plata_all),
+            'total_retineri': sum(float(c['total_retineri'] or 0) for c in clients_data),
+            'total_net': sum(float(c['total_net'] or 0) for c in clients_data)
+        },
+        'chart_data': [
+            {
+                'name': c['client__denumire'],
+                'value': float(c['total_rest_plata'] or 0),
+                'percent': c['rest_plata_share_percent']
+            }
+            for c in clients_data if c['total_rest_plata'] and c['total_rest_plata'] > 0
+        ]
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsManagementOrAdmin])
+def report_retineri(request):
+    """
+    GET /api/eco-fin/report/retineri/
+    Raport detaliat rețineri.
+    
+    Parametri:
+    - year (obligatoriu)
+    - month (opțional)
+    - client_id (opțional)
+    """
+    year = request.query_params.get('year')
+    month = request.query_params.get('month')
+    client_id = request.query_params.get('client_id')
+    
+    if not year:
+        return Response({'detail': 'Year este obligatoriu.'}, status=400)
+    
+    qs = EcoFinProcessedRecord.objects.filter(year=int(year))
+    if month:
+        qs = qs.filter(month=int(month))
+    if client_id:
+        qs = qs.filter(client_id=int(client_id))
+    
+    # Totaluri
+    totals = qs.aggregate(
+        total_workers=Count('id'),
+        total_retineri=Sum('retineri'),
+        total_brut=Sum('salariu_brut'),
+        total_net=Sum('net'),
+        total_rest_plata=Sum('rest_plata')
+    )
+    
+    # Per client
+    per_client = list(
+        qs.values('client__id', 'client__denumire')
+        .annotate(
+            workers_count=Count('id'),
+            total_retineri=Sum('retineri'),
+            total_brut=Sum('salariu_brut'),
+            avg_retineri=Avg('retineri')
+        )
+        .order_by('-total_retineri')
+    )
+    
+    # Per lună (pentru trend)
+    per_month = list(
+        qs.values('year', 'month')
+        .annotate(
+            workers_count=Count('id'),
+            total_retineri=Sum('retineri'),
+            avg_retineri=Avg('retineri')
+        )
+        .order_by('year', 'month')
+    )
+    
+    # Procent rețineri din brut
+    retineri_percent = 0
+    if totals['total_brut'] and totals['total_brut'] > 0:
+        retineri_percent = (totals['total_retineri'] / totals['total_brut']) * 100
+    
+    return Response({
+        'year': int(year),
+        'month': int(month) if month else None,
+        'client_id': int(client_id) if client_id else None,
+        'totals': {
+            'total_workers': totals['total_workers'] or 0,
+            'total_retineri': float(totals['total_retineri'] or 0),
+            'total_brut': float(totals['total_brut'] or 0),
+            'total_net': float(totals['total_net'] or 0),
+            'total_rest_plata': float(totals['total_rest_plata'] or 0),
+            'retineri_percent_of_brut': float(retineri_percent)
+        },
+        'per_client': per_client,
+        'per_month': per_month
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsManagementOrAdmin])
+def report_financial_summary(request):
+    """
+    GET /api/eco-fin/report/financial-summary/
+    Raport sumar financiar complet.
+    
+    Parametri:
+    - year (obligatoriu)
+    - month (opțional)
+    """
+    year = request.query_params.get('year')
+    month = request.query_params.get('month')
+    
+    if not year:
+        return Response({'detail': 'Year este obligatoriu.'}, status=400)
+    
+    qs = EcoFinProcessedRecord.objects.filter(year=int(year))
+    if month:
+        qs = qs.filter(month=int(month))
+    
+    # Totaluri complete
+    totals = qs.aggregate(
+        total_workers=Count('id'),
+        total_ore=Sum('ore_lucrate'),
+        total_brut=Sum('salariu_brut'),
+        total_cam=Sum('cam'),
+        total_cost_salarial=Sum('cost_salarial_complet'),
+        total_net=Sum('net'),
+        total_retineri=Sum('retineri'),
+        total_rest_plata=Sum('rest_plata'),
+        total_cazare=Sum('cost_cazare'),
+        total_masa=Sum('cost_masa'),
+        total_transport=Sum('cost_transport'),
+        total_indirecte=Sum('cota_indirecte'),
+        total_concediu=Sum('cost_concediu'),
+        total_cost_total=Sum('cost_salariat_total'),
+        total_venit=Sum('venit_generat'),
+        total_profit=Sum('profitabilitate')
+    )
+    
+    # Calculăm ratii și procente
+    venit = float(totals['total_venit'] or 0)
+    cost = float(totals['total_cost_total'] or 0)
+    profit = float(totals['total_profit'] or 0)
+    brut = float(totals['total_brut'] or 0)
+    
+    return Response({
+        'year': int(year),
+        'month': int(month) if month else None,
+        'summary': {
+            # Venituri și Profit
+            'total_workers': totals['total_workers'] or 0,
+            'total_ore': float(totals['total_ore'] or 0),
+            'total_venit': venit,
+            'total_profit': profit,
+            'profit_margin': (profit / venit * 100) if venit > 0 else 0,
+            
+            # Costuri salariale
+            'salarii': {
+                'brut': brut,
+                'cam': float(totals['total_cam'] or 0),
+                'cost_salarial_complet': float(totals['total_cost_salarial'] or 0),
+                'net': float(totals['total_net'] or 0),
+                'retineri': float(totals['total_retineri'] or 0),
+                'rest_plata': float(totals['total_rest_plata'] or 0),
+                'retineri_percent': (float(totals['total_retineri'] or 0) / brut * 100) if brut > 0 else 0
+            },
+            
+            # Alte costuri
+            'alte_costuri': {
+                'cazare': float(totals['total_cazare'] or 0),
+                'masa': float(totals['total_masa'] or 0),
+                'transport': float(totals['total_transport'] or 0),
+                'indirecte': float(totals['total_indirecte'] or 0),
+                'concediu': float(totals['total_concediu'] or 0)
+            },
+            
+            # Total costuri
+            'total_costuri': cost,
+            
+            # Ratii
+            'ratii': {
+                'cost_per_ora': (cost / float(totals['total_ore'])) if totals['total_ore'] else 0,
+                'venit_per_ora': (venit / float(totals['total_ore'])) if totals['total_ore'] else 0,
+                'profit_per_lucrator': (profit / totals['total_workers']) if totals['total_workers'] else 0,
+                'cost_salarial_percent': (float(totals['total_cost_salarial'] or 0) / cost * 100) if cost > 0 else 0
+            }
+        }
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsManagementOrAdmin])
 def export_pdf(request):

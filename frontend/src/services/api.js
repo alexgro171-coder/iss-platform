@@ -428,6 +428,43 @@ export const ecoFinAPI = {
     return response.data
   },
 
+  // === RAPOARTE FINANCIARE (REST PLATĂ, REȚINERI) ===
+  getReportRestPlata: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/rest-plata/?${queryParams}`)
+    return response.data
+  },
+
+  getReportRestPlataByClient: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/rest-plata-client/?${queryParams}`)
+    return response.data
+  },
+
+  getReportRetineri: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/retineri/?${queryParams}`)
+    return response.data
+  },
+
+  getFinancialSummary: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/financial-summary/?${queryParams}`)
+    return response.data
+  },
+
   // === IMPORT ===
   uploadExcel: async (file, year, month) => {
     const formData = new FormData()

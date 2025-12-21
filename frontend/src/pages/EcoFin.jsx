@@ -48,6 +48,16 @@ function EcoFin() {
   const [clients, setClients] = useState([])
   const [validating, setValidating] = useState(false)
   
+  // State pentru rapoarte financiare (rest plată, rețineri)
+  const [financialData, setFinancialData] = useState(null)
+  const [restPlataData, setRestPlataData] = useState(null)
+  const [restPlataChartData, setRestPlataChartData] = useState([])
+  const [financialFilters, setFinancialFilters] = useState({
+    year: new Date().getFullYear(),
+    month: '',
+    client_id: ''
+  })
+  
   // Loading și error
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -302,6 +312,47 @@ function EcoFin() {
     }
   }
 
+  // === HANDLERS RAPOARTE FINANCIARE ===
+  const handleFinancialFilterChange = (e) => {
+    setFinancialFilters(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }))
+  }
+
+  const handleLoadFinancialReports = async () => {
+    setLoading(true)
+    setError('')
+    
+    try {
+      // Încarcă date în paralel
+      const [summaryData, restPlataClientData] = await Promise.all([
+        ecoFinAPI.getFinancialSummary(financialFilters),
+        ecoFinAPI.getReportRestPlataByClient(financialFilters)
+      ])
+      
+      setFinancialData(summaryData)
+      setRestPlataData(restPlataClientData)
+      
+      // Pregătim datele pentru graficul PIE rest plată
+      if (restPlataClientData.chart_data && restPlataClientData.chart_data.length > 0) {
+        const pieData = restPlataClientData.chart_data.map((c, idx) => ({
+          name: c.name,
+          value: c.value,
+          percent: c.percent,
+          color: CHART_COLORS[idx % CHART_COLORS.length]
+        }))
+        setRestPlataChartData(pieData)
+      } else {
+        setRestPlataChartData([])
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Eroare la încărcarea rapoartelor financiare.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Format number
   const formatNumber = (num, decimals = 2) => {
     if (num === null || num === undefined) return '-'
@@ -366,6 +417,12 @@ function EcoFin() {
           onClick={() => setActiveTab('reports')}
         >
           📊 Rapoarte
+        </button>
+        <button 
+          className={`tab ${activeTab === 'financial' ? 'active' : ''}`}
+          onClick={() => setActiveTab('financial')}
+        >
+          💵 Financiar
         </button>
       </div>
 
@@ -852,6 +909,250 @@ function EcoFin() {
           {records.length === 0 && reportSummary === null && (
             <div className="empty-state card">
               <p>Selectează filtrele și apasă "Generează Raport" pentru a vedea datele.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: FINANCIAR */}
+      {activeTab === 'financial' && (
+        <div className="tab-content">
+          {/* Filtre */}
+          <div className="card filters-section">
+            <h3>🔍 Filtre Raport Financiar</h3>
+            <div className="form-row">
+              <div className="form-group">
+                <label>An</label>
+                <select name="year" value={financialFilters.year} onChange={handleFinancialFilterChange}>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Lună</label>
+                <select name="month" value={financialFilters.month} onChange={handleFinancialFilterChange}>
+                  <option value="">Toate lunile</option>
+                  {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Client</label>
+                <select name="client_id" value={financialFilters.client_id} onChange={handleFinancialFilterChange}>
+                  <option value="">Toți clienții</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.denumire}</option>)}
+                </select>
+              </div>
+              <div className="form-group btn-group-vertical">
+                <label>&nbsp;</label>
+                <button className="btn btn-primary" onClick={handleLoadFinancialReports} disabled={loading}>
+                  {loading ? 'Se încarcă...' : '💵 Generează Raport'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sumar Financiar */}
+          {financialData && (
+            <>
+              <div className="summary-grid financial-summary">
+                <div className="summary-card total">
+                  <span className="label">Total Lucrători</span>
+                  <span className="value">{financialData.summary.total_workers}</span>
+                </div>
+                <div className="summary-card">
+                  <span className="label">Salariu Brut Total</span>
+                  <span className="value">{formatCurrency(financialData.summary.salarii.brut)}</span>
+                </div>
+                <div className="summary-card">
+                  <span className="label">CAM Total</span>
+                  <span className="value">{formatCurrency(financialData.summary.salarii.cam)}</span>
+                </div>
+                <div className="summary-card">
+                  <span className="label">Salariu Net Total</span>
+                  <span className="value">{formatCurrency(financialData.summary.salarii.net)}</span>
+                </div>
+                <div className="summary-card warning">
+                  <span className="label">Total Rețineri</span>
+                  <span className="value">{formatCurrency(financialData.summary.salarii.retineri)}</span>
+                  <span className="sub-value">{formatNumber(financialData.summary.salarii.retineri_percent, 1)}% din brut</span>
+                </div>
+                <div className="summary-card highlight">
+                  <span className="label">💵 Rest de Plată Total</span>
+                  <span className="value">{formatCurrency(financialData.summary.salarii.rest_plata)}</span>
+                </div>
+              </div>
+
+              {/* Alte Costuri */}
+              <div className="card costs-breakdown">
+                <h3>📊 Defalcare Costuri</h3>
+                <div className="costs-grid">
+                  <div className="cost-item">
+                    <span className="cost-label">Cost Salarial Complet</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.salarii.cost_salarial_complet)}</span>
+                    <span className="cost-detail">(Brut + CAM)</span>
+                  </div>
+                  <div className="cost-item">
+                    <span className="cost-label">Cazare</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.alte_costuri.cazare)}</span>
+                  </div>
+                  <div className="cost-item">
+                    <span className="cost-label">Masă</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.alte_costuri.masa)}</span>
+                  </div>
+                  <div className="cost-item">
+                    <span className="cost-label">Transport</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.alte_costuri.transport)}</span>
+                  </div>
+                  <div className="cost-item">
+                    <span className="cost-label">Cheltuieli Indirecte</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.alte_costuri.indirecte)}</span>
+                  </div>
+                  <div className="cost-item">
+                    <span className="cost-label">Cost Concediu</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.alte_costuri.concediu)}</span>
+                  </div>
+                  <div className="cost-item total">
+                    <span className="cost-label">TOTAL COSTURI</span>
+                    <span className="cost-value">{formatCurrency(financialData.summary.total_costuri)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ratii */}
+              <div className="card ratios-section">
+                <h3>📈 Indicatori Financiari</h3>
+                <div className="ratios-grid">
+                  <div className="ratio-item">
+                    <span className="ratio-value">{formatCurrency(financialData.summary.ratii.cost_per_ora)}</span>
+                    <span className="ratio-label">Cost per Oră</span>
+                  </div>
+                  <div className="ratio-item">
+                    <span className="ratio-value">{formatCurrency(financialData.summary.ratii.venit_per_ora)}</span>
+                    <span className="ratio-label">Venit per Oră</span>
+                  </div>
+                  <div className="ratio-item">
+                    <span className="ratio-value">{formatCurrency(financialData.summary.ratii.profit_per_lucrator)}</span>
+                    <span className="ratio-label">Profit per Lucrător</span>
+                  </div>
+                  <div className="ratio-item">
+                    <span className="ratio-value">{formatNumber(financialData.summary.ratii.cost_salarial_percent, 1)}%</span>
+                    <span className="ratio-label">Cost Salarial din Total</span>
+                  </div>
+                  <div className="ratio-item highlight">
+                    <span className="ratio-value">{formatNumber(financialData.summary.profit_margin, 1)}%</span>
+                    <span className="ratio-label">Marjă Profit</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Grafic PIE Rest Plată per Client */}
+          {restPlataChartData.length > 0 && (
+            <div className="card chart-section">
+              <h3>💵 Distribuție Rest Plată pe Clienți</h3>
+              <div className="pie-chart-container">
+                <div className="pie-chart">
+                  <svg viewBox="0 0 100 100">
+                    {(() => {
+                      let cumulativePercent = 0
+                      return restPlataChartData.map((item, idx) => {
+                        const percent = item.percent / 100
+                        const startAngle = cumulativePercent * 2 * Math.PI
+                        cumulativePercent += percent
+                        const endAngle = cumulativePercent * 2 * Math.PI
+                        
+                        const x1 = 50 + 40 * Math.cos(startAngle - Math.PI / 2)
+                        const y1 = 50 + 40 * Math.sin(startAngle - Math.PI / 2)
+                        const x2 = 50 + 40 * Math.cos(endAngle - Math.PI / 2)
+                        const y2 = 50 + 40 * Math.sin(endAngle - Math.PI / 2)
+                        
+                        const largeArcFlag = percent > 0.5 ? 1 : 0
+                        
+                        const pathData = [
+                          `M 50 50`,
+                          `L ${x1} ${y1}`,
+                          `A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                          `Z`
+                        ].join(' ')
+                        
+                        return (
+                          <path
+                            key={idx}
+                            d={pathData}
+                            fill={item.color}
+                            stroke="#1e293b"
+                            strokeWidth="0.5"
+                          >
+                            <title>{item.name}: {formatCurrency(item.value)} ({formatNumber(item.percent, 1)}%)</title>
+                          </path>
+                        )
+                      })
+                    })()}
+                  </svg>
+                </div>
+                <div className="chart-legend">
+                  {restPlataChartData.map((item, idx) => (
+                    <div key={idx} className="legend-item">
+                      <span className="legend-color" style={{ backgroundColor: item.color }}></span>
+                      <span className="legend-label">{item.name}</span>
+                      <span className="legend-value">{formatCurrency(item.value)}</span>
+                      <span className="legend-percent">({formatNumber(item.percent, 1)}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tabel Rest Plată per Client */}
+          {restPlataData && restPlataData.clients && restPlataData.clients.length > 0 && (
+            <div className="card">
+              <h3>💵 Rest Plată per Client</h3>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Lucrători</th>
+                      <th>Salariu Brut</th>
+                      <th>Salariu Net</th>
+                      <th>Rețineri</th>
+                      <th>Rest Plată</th>
+                      <th>% din Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {restPlataData.clients.map((c, idx) => (
+                      <tr key={idx}>
+                        <td>{c.client__denumire}</td>
+                        <td className="number">{c.workers_count}</td>
+                        <td className="number">{formatCurrency(c.total_brut)}</td>
+                        <td className="number">{formatCurrency(c.total_net)}</td>
+                        <td className="number">{formatCurrency(c.total_retineri)}</td>
+                        <td className="number highlight-cell">{formatCurrency(c.total_rest_plata)}</td>
+                        <td className="number">{formatNumber(c.rest_plata_share_percent, 1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="totals-row">
+                      <td><strong>TOTAL</strong></td>
+                      <td className="number"><strong>{restPlataData.totals.total_clients}</strong></td>
+                      <td className="number">-</td>
+                      <td className="number"><strong>{formatCurrency(restPlataData.totals.total_net)}</strong></td>
+                      <td className="number"><strong>{formatCurrency(restPlataData.totals.total_retineri)}</strong></td>
+                      <td className="number highlight-cell"><strong>{formatCurrency(restPlataData.totals.total_rest_plata)}</strong></td>
+                      <td className="number"><strong>100%</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!financialData && !restPlataData && (
+            <div className="empty-state card">
+              <p>Selectează filtrele și apasă "Generează Raport" pentru a vedea datele financiare.</p>
             </div>
           )}
         </div>
