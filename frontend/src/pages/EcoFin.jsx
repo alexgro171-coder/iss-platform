@@ -90,15 +90,17 @@ function EcoFin() {
 
   const loadInitialData = async () => {
     setLoading(true)
+    setError('')
     try {
       const [settingsData, clientsData] = await Promise.all([
-        ecoFinAPI.getAllSettings(),
-        clientsAPI.getAll()
+        ecoFinAPI.getAllSettings().catch(() => []),
+        clientsAPI.getAll().catch(() => [])
       ])
-      setSettings(settingsData)
-      setClients(clientsData)
+      setSettings(settingsData || [])
+      setClients(clientsData || [])
     } catch (err) {
       console.error('Error loading data:', err)
+      setError('Eroare la încărcarea datelor. Verificați conexiunea.')
     } finally {
       setLoading(false)
     }
@@ -156,16 +158,23 @@ function EcoFin() {
   }
 
   const handleDownloadTemplate = async () => {
+    setError('')
     try {
       const blob = await ecoFinAPI.downloadTemplate()
+      if (!blob) {
+        throw new Error('Nu s-a putut descărca template-ul')
+      }
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = 'template_import_ecofin.xlsx'
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
     } catch (err) {
-      setError('Eroare la descărcarea template-ului.')
+      console.error('Download template error:', err)
+      setError('Eroare la descărcarea template-ului. Verificați autentificarea.')
     }
   }
 
@@ -227,14 +236,14 @@ function EcoFin() {
     try {
       // Folosim noile API-uri
       const [recordsData, summaryData] = await Promise.all([
-        ecoFinAPI.getRecords(reportFilters),
-        ecoFinAPI.getRecordsSummary(reportFilters)
+        ecoFinAPI.getRecords(reportFilters).catch(() => []),
+        ecoFinAPI.getRecordsSummary(reportFilters).catch(() => null)
       ])
-      setRecords(recordsData)
-      setReportSummary(summaryData)
+      setRecords(recordsData || [])
+      setReportSummary(summaryData || null)
       
       // Pregătim datele pentru graficul PIE
-      if (summaryData.by_client && summaryData.by_client.length > 0) {
+      if (summaryData?.by_client && summaryData.by_client.length > 0) {
         const pieData = summaryData.by_client
           .filter(c => c.total_profit > 0)
           .map((c, idx) => ({
@@ -248,7 +257,8 @@ function EcoFin() {
         setChartData([])
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Eroare la încărcarea rapoartelor.')
+      console.error('Reports error:', err)
+      setError(err?.response?.data?.detail || 'Eroare la încărcarea rapoartelor.')
     } finally {
       setLoading(false)
     }
@@ -327,15 +337,15 @@ function EcoFin() {
     try {
       // Încarcă date în paralel
       const [summaryData, restPlataClientData] = await Promise.all([
-        ecoFinAPI.getFinancialSummary(financialFilters),
-        ecoFinAPI.getReportRestPlataByClient(financialFilters)
+        ecoFinAPI.getFinancialSummary(financialFilters).catch(() => null),
+        ecoFinAPI.getReportRestPlataByClient(financialFilters).catch(() => null)
       ])
       
-      setFinancialData(summaryData)
-      setRestPlataData(restPlataClientData)
+      setFinancialData(summaryData || null)
+      setRestPlataData(restPlataClientData || null)
       
       // Pregătim datele pentru graficul PIE rest plată
-      if (restPlataClientData.chart_data && restPlataClientData.chart_data.length > 0) {
+      if (restPlataClientData?.chart_data && restPlataClientData.chart_data.length > 0) {
         const pieData = restPlataClientData.chart_data.map((c, idx) => ({
           name: c.name,
           value: c.value,
@@ -347,7 +357,8 @@ function EcoFin() {
         setRestPlataChartData([])
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Eroare la încărcarea rapoartelor financiare.')
+      console.error('Financial reports error:', err)
+      setError(err?.response?.data?.detail || 'Eroare la încărcarea rapoartelor financiare.')
     } finally {
       setLoading(false)
     }

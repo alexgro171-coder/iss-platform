@@ -508,10 +508,15 @@ export const ecoFinAPI = {
   },
 
   downloadTemplate: async () => {
-    const response = await api.get('/eco-fin/import/template/', {
-      responseType: 'blob'
-    })
-    return response.data
+    try {
+      const response = await api.get('/eco-fin/import/template/', {
+        responseType: 'blob'
+      })
+      return response.data
+    } catch (error) {
+      console.error('Download template error:', error)
+      throw error
+    }
   },
 
   // === EXPORT ===
