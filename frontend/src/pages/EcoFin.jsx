@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { ecoFinAPI, clientsAPI } from '../services/api'
 import './EcoFin.css'
@@ -6,6 +6,14 @@ import './EcoFin.css'
 /**
  * Pagina Eco-Fin - Evaluare Profitabilitate
  * Accesibil doar pentru Management și Admin
+ * 
+ * Funcționalități:
+ * - Setări globale lunare (cheltuieli indirecte, cost concediu)
+ * - Import date salariale din Excel (identificare după nr_CIM)
+ * - Calcul automat profitabilitate: (ore × tarif) - costuri totale
+ * - Validare managerială
+ * - Rapoarte cu grafic PIE
+ * - Export PDF/Word
  */
 function EcoFin() {
   const { isManagementOrAdmin, user } = useAuth()
@@ -23,20 +31,22 @@ function EcoFin() {
   
   // State pentru import
   const [importYear, setImportYear] = useState(new Date().getFullYear())
-  const [importMonth, setImportMonth] = useState(new Date().getMonth()) // Luna anterioară
+  const [importMonth, setImportMonth] = useState(new Date().getMonth() || 12) // Luna anterioară
   const [importFile, setImportFile] = useState(null)
   const [previewData, setPreviewData] = useState(null)
   const [importing, setImporting] = useState(false)
   
   // State pentru rapoarte
-  const [reports, setReports] = useState([])
+  const [records, setRecords] = useState([])
   const [reportSummary, setReportSummary] = useState(null)
+  const [chartData, setChartData] = useState([])
   const [reportFilters, setReportFilters] = useState({
     year: new Date().getFullYear(),
     month: '',
     client_id: ''
   })
   const [clients, setClients] = useState([])
+  const [validating, setValidating] = useState(false)
   
   // Loading și error
   const [loading, setLoading] = useState(false)
@@ -54,6 +64,13 @@ function EcoFin() {
   ]
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 6 }, (_, i) => currentYear - 3 + i)
+
+  // Culori pentru graficul PIE
+  const CHART_COLORS = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+    '#14b8a6', '#a855f7', '#22c55e', '#eab308', '#0ea5e9'
+  ]
 
   useEffect(() => {
     if (isManagementOrAdmin()) {
@@ -128,6 +145,20 @@ function EcoFin() {
     setError('')
   }
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await ecoFinAPI.downloadTemplate()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'template_import_ecofin.xlsx'
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError('Eroare la descărcarea template-ului.')
+    }
+  }
+
   const handleUploadPreview = async () => {
     if (!importFile) {
       setError('Selectează un fișier Excel.')
@@ -140,7 +171,7 @@ function EcoFin() {
     try {
       const data = await ecoFinAPI.uploadExcel(importFile, importYear, importMonth)
       setPreviewData(data)
-      setSuccess(`Preview generat: ${data.valid_rows} rânduri valide din ${data.total_rows} total.`)
+      setSuccess(`Preview generat: ${data.matched_rows} rânduri identificate din ${data.total_rows} total.`)
     } catch (err) {
       setError(err.response?.data?.detail || 'Eroare la procesarea fișierului.')
     } finally {
@@ -148,14 +179,15 @@ function EcoFin() {
     }
   }
 
-  const handleValidateImport = async () => {
+  const handleProcessImport = async () => {
     if (!previewData) return
     
     setImporting(true)
     setError('')
     
     try {
-      const result = await ecoFinAPI.validateImport(
+      const result = await ecoFinAPI.processImport(
+        previewData.batch_id,
         importYear, 
         importMonth, 
         previewData.preview.filter(r => r.is_valid)
@@ -164,7 +196,7 @@ function EcoFin() {
       setPreviewData(null)
       setImportFile(null)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Eroare la validarea importului.')
+      setError(err.response?.data?.detail || 'Eroare la procesarea importului.')
     } finally {
       setImporting(false)
     }
@@ -183,16 +215,90 @@ function EcoFin() {
     setError('')
     
     try {
-      const [reportsData, summaryData] = await Promise.all([
-        ecoFinAPI.getReports(reportFilters),
-        ecoFinAPI.getReportSummary(reportFilters)
+      // Folosim noile API-uri
+      const [recordsData, summaryData] = await Promise.all([
+        ecoFinAPI.getRecords(reportFilters),
+        ecoFinAPI.getRecordsSummary(reportFilters)
       ])
-      setReports(reportsData)
+      setRecords(recordsData)
       setReportSummary(summaryData)
+      
+      // Pregătim datele pentru graficul PIE
+      if (summaryData.by_client && summaryData.by_client.length > 0) {
+        const pieData = summaryData.by_client
+          .filter(c => c.total_profit > 0)
+          .map((c, idx) => ({
+            name: c.client__denumire,
+            value: parseFloat(c.total_profit),
+            percent: c.profit_share_percent,
+            color: CHART_COLORS[idx % CHART_COLORS.length]
+          }))
+        setChartData(pieData)
+      } else {
+        setChartData([])
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Eroare la încărcarea rapoartelor.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleValidateMonth = async () => {
+    if (!reportFilters.year || !reportFilters.month) {
+      setError('Selectează anul și luna pentru validare.')
+      return
+    }
+    
+    setValidating(true)
+    setError('')
+    
+    try {
+      const result = await ecoFinAPI.validateMonth(
+        parseInt(reportFilters.year),
+        parseInt(reportFilters.month)
+      )
+      setSuccess(result.message)
+      handleLoadReports()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Eroare la validarea datelor.')
+    } finally {
+      setValidating(false)
+    }
+  }
+
+  // === HANDLERS EXPORT ===
+  const handleExportPDF = async () => {
+    try {
+      const blob = await ecoFinAPI.exportPDF(reportFilters)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const period = reportFilters.month 
+        ? `${reportFilters.month}_${reportFilters.year}` 
+        : reportFilters.year
+      a.download = `raport_ecofin_${period}.pdf`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError('Eroare la exportul PDF.')
+    }
+  }
+
+  const handleExportWord = async () => {
+    try {
+      const blob = await ecoFinAPI.exportWord(reportFilters)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const period = reportFilters.month 
+        ? `${reportFilters.month}_${reportFilters.year}` 
+        : reportFilters.year
+      a.download = `raport_ecofin_${period}.docx`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      setError('Eroare la exportul Word.')
     }
   }
 
@@ -214,6 +320,11 @@ function EcoFin() {
     })
   }
 
+  // Calculează totalul pentru graficul PIE
+  const totalProfit = useMemo(() => {
+    return chartData.reduce((sum, item) => sum + item.value, 0)
+  }, [chartData])
+
   // Verificare acces
   if (!isManagementOrAdmin()) {
     return (
@@ -232,7 +343,7 @@ function EcoFin() {
       <header className="page-header">
         <div>
           <h1>💰 Eco-Fin - Profitabilitate</h1>
-          <p>Evaluare profitabilitate lunară per lucrător</p>
+          <p>Evaluare profitabilitate lunară per lucrător și client</p>
         </div>
       </header>
 
@@ -242,13 +353,13 @@ function EcoFin() {
           className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => setActiveTab('settings')}
         >
-          ⚙️ Setări Globale
+          ⚙️ Setări Lunare
         </button>
         <button 
           className={`tab ${activeTab === 'import' ? 'active' : ''}`}
           onClick={() => setActiveTab('import')}
         >
-          📤 Import Date
+          📤 Import Salarii
         </button>
         <button 
           className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
@@ -286,17 +397,17 @@ function EcoFin() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Cheltuieli Indirecte (RON/lună)</label>
+                  <label>Cheltuieli Indirecte Totale (RON/lună)</label>
                   <input
                     type="number"
                     name="cheltuieli_indirecte"
                     value={settingsForm.cheltuieli_indirecte}
                     onChange={handleSettingsChange}
-                    placeholder="ex: 5000.00"
+                    placeholder="ex: 50000.00"
                     step="0.01"
                     required
                   />
-                  <small>Se împart egal la toți lucrătorii din luna respectivă</small>
+                  <small>Se împart egal la toți lucrătorii activi din luna respectivă</small>
                 </div>
                 
                 <div className="form-group">
@@ -344,23 +455,33 @@ function EcoFin() {
                       <th>Perioadă</th>
                       <th>Cheltuieli Ind.</th>
                       <th>Cost Concediu</th>
+                      <th>Status</th>
                       <th>Acțiuni</th>
                     </tr>
                   </thead>
                   <tbody>
                     {settings.map(s => (
-                      <tr key={s.id}>
+                      <tr key={s.id} className={s.is_locked ? 'locked-row' : ''}>
                         <td>{months.find(m => m.value === s.month)?.label} {s.year}</td>
                         <td className="number">{formatCurrency(s.cheltuieli_indirecte)}</td>
                         <td className="number">{formatCurrency(s.cost_concediu)}</td>
                         <td>
-                          <button 
-                            className="btn-icon" 
-                            onClick={() => handleEditSettings(s)}
-                            title="Editează"
-                          >
-                            ✏️
-                          </button>
+                          {s.is_locked ? (
+                            <span className="badge badge-success">🔒 Validat</span>
+                          ) : (
+                            <span className="badge badge-warning">📝 Draft</span>
+                          )}
+                        </td>
+                        <td>
+                          {!s.is_locked && (
+                            <button 
+                              className="btn-icon" 
+                              onClick={() => handleEditSettings(s)}
+                              title="Editează"
+                            >
+                              ✏️
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -378,13 +499,24 @@ function EcoFin() {
       {activeTab === 'import' && (
         <div className="tab-content">
           <div className="card import-section">
-            <h3>📤 Import Date Lunare</h3>
-            <p className="import-info">
-              Încarcă fișierul Excel cu datele lunare. Coloanele necesare: 
-              <strong> Passport</strong> (nr. pașaport), 
-              <strong> Hours</strong> (ore lucrate), 
-              <strong> Salary</strong> (cost salarial).
-            </p>
+            <h3>📤 Import Date Salariale Lunare</h3>
+            <div className="import-info">
+              <p>
+                Încarcă fișierul Excel cu datele salariale. 
+                <strong> Coloane necesare:</strong>
+              </p>
+              <ul className="columns-list">
+                <li><code>nr_cim</code> - Număr CIM (obligatoriu, pentru identificare)</li>
+                <li><code>nume</code>, <code>prenume</code> - pentru verificare</li>
+                <li><code>salariu</code> / <code>brut</code> - Salariu brut (obligatoriu)</li>
+                <li><code>ore</code> / <code>lucrat</code> - Ore lucrate (obligatoriu)</li>
+                <li><code>cam</code> - Contribuție asigurări muncă (obligatoriu)</li>
+                <li><code>net</code>, <code>retineri</code>, <code>rest_plata</code> - opționale</li>
+              </ul>
+              <button className="btn btn-sm btn-secondary" onClick={handleDownloadTemplate}>
+                📥 Descarcă Template Excel
+              </button>
+            </div>
             
             <div className="import-form">
               <div className="form-row">
@@ -424,14 +556,14 @@ function EcoFin() {
               <div className="preview-header">
                 <h3>Preview Import - {months.find(m => m.value === importMonth)?.label} {importYear}</h3>
                 <div className="preview-stats">
-                  <span className="stat valid">✓ {previewData.valid_rows} valide</span>
-                  <span className="stat invalid">✗ {previewData.invalid_rows} invalide</span>
+                  <span className="stat valid">✓ {previewData.matched_rows} identificate</span>
+                  <span className="stat invalid">✗ {previewData.error_rows} erori</span>
                 </div>
               </div>
               
               <div className="preview-settings">
-                <span>Cheltuieli indirecte/lucrător: <strong>{formatCurrency(previewData.settings.cheltuieli_per_worker)}</strong></span>
-                <span>Cost concediu: <strong>{formatCurrency(previewData.settings.cost_concediu)}</strong></span>
+                <span>Cheltuieli indirecte/lucrător: <strong>{formatCurrency(previewData.settings?.cota_indirecte_per_worker)}</strong></span>
+                <span>Cost concediu: <strong>{formatCurrency(previewData.settings?.cost_concediu)}</strong></span>
               </div>
 
               <div className="table-container">
@@ -439,11 +571,13 @@ function EcoFin() {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Pașaport</th>
-                      <th>Nume</th>
+                      <th>Nr. CIM</th>
+                      <th>Nume Excel</th>
+                      <th>Lucrător Găsit</th>
                       <th>Client</th>
                       <th>Ore</th>
-                      <th>Salariu</th>
+                      <th>Brut</th>
+                      <th>CAM</th>
                       <th>Tarif/h</th>
                       <th>Profit Est.</th>
                       <th>Status</th>
@@ -453,14 +587,23 @@ function EcoFin() {
                     {previewData.preview.map((row, idx) => (
                       <tr key={idx} className={row.is_valid ? '' : 'invalid-row'}>
                         <td>{row.row_number}</td>
-                        <td className="mono">{row.pasaport_nr}</td>
-                        <td>{row.worker_nume} {row.worker_prenume}</td>
+                        <td className="mono">{row.nr_cim}</td>
+                        <td>{row.nume} {row.prenume}</td>
+                        <td>
+                          {row.is_matched ? (
+                            <span className={row.worker_nume_match ? 'match-ok' : 'match-warning'}>
+                              {row.worker_nume} {row.worker_prenume}
+                              {!row.worker_nume_match && ' ⚠️'}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td>{row.client_denumire || '-'}</td>
-                        <td className="number">{formatNumber(row.hours_worked, 1)}</td>
-                        <td className="number">{formatCurrency(row.salary_cost)}</td>
+                        <td className="number">{formatNumber(row.ore_lucrate, 1)}</td>
+                        <td className="number">{formatCurrency(row.salariu_brut)}</td>
+                        <td className="number">{formatCurrency(row.cam)}</td>
                         <td className="number">{formatCurrency(row.tarif_orar)}</td>
-                        <td className={`number ${row.profit_brut_estimat >= 0 ? 'profit' : 'loss'}`}>
-                          {formatCurrency(row.profit_brut_estimat)}
+                        <td className={`number ${row.profitabilitate_estimata >= 0 ? 'profit' : 'loss'}`}>
+                          {formatCurrency(row.profitabilitate_estimata)}
                         </td>
                         <td>
                           {row.is_valid ? (
@@ -477,16 +620,31 @@ function EcoFin() {
                 </table>
               </div>
 
+              {/* Warnings */}
+              {previewData.preview.some(r => r.warnings?.length > 0) && (
+                <div className="warnings-section">
+                  <h4>⚠️ Avertismente</h4>
+                  <ul>
+                    {previewData.preview
+                      .filter(r => r.warnings?.length > 0)
+                      .flatMap(r => r.warnings.map((w, i) => (
+                        <li key={`${r.row_number}-${i}`}>Rând {r.row_number}: {w}</li>
+                      )))
+                    }
+                  </ul>
+                </div>
+              )}
+
               <div className="preview-actions">
                 <button className="btn btn-secondary" onClick={() => setPreviewData(null)}>
                   Anulează
                 </button>
                 <button 
                   className="btn btn-success" 
-                  onClick={handleValidateImport}
-                  disabled={importing || previewData.valid_rows === 0}
+                  onClick={handleProcessImport}
+                  disabled={importing || previewData.matched_rows === 0}
                 >
-                  ✓ Validează și Salvează ({previewData.valid_rows} înregistrări)
+                  ✓ Procesează și Salvează ({previewData.matched_rows} înregistrări)
                 </button>
               </div>
             </div>
@@ -521,7 +679,7 @@ function EcoFin() {
                   {clients.map(c => <option key={c.id} value={c.id}>{c.denumire}</option>)}
                 </select>
               </div>
-              <div className="form-group">
+              <div className="form-group btn-group-vertical">
                 <label>&nbsp;</label>
                 <button className="btn btn-primary" onClick={handleLoadReports} disabled={loading}>
                   {loading ? 'Se încarcă...' : '📊 Generează Raport'}
@@ -530,7 +688,7 @@ function EcoFin() {
             </div>
           </div>
 
-          {/* Summary */}
+          {/* Summary Cards */}
           {reportSummary && (
             <div className="summary-grid">
               <div className="summary-card total">
@@ -543,7 +701,7 @@ function EcoFin() {
               </div>
               <div className="summary-card">
                 <span className="label">Venituri Totale</span>
-                <span className="value">{formatCurrency(reportSummary.total_revenue)}</span>
+                <span className="value">{formatCurrency(reportSummary.total_venit)}</span>
               </div>
               <div className="summary-card">
                 <span className="label">Costuri Totale</span>
@@ -554,25 +712,103 @@ function EcoFin() {
                 <span className="value">{formatCurrency(reportSummary.total_profit)}</span>
               </div>
               <div className="summary-card">
-                <span className="label">Profit Mediu/Lucrător</span>
-                <span className="value">{formatCurrency(reportSummary.average_profit_per_worker)}</span>
+                <span className="label">Marjă Profit</span>
+                <span className="value">{formatNumber(reportSummary.profit_margin_percent, 1)}%</span>
               </div>
             </div>
           )}
 
-          {/* Tabel Rapoarte */}
-          {reports.length > 0 && (
+          {/* Grafic PIE */}
+          {chartData.length > 0 && (
+            <div className="card chart-section">
+              <h3>📈 Distribuție Profit pe Clienți</h3>
+              <div className="pie-chart-container">
+                <div className="pie-chart">
+                  <svg viewBox="0 0 100 100">
+                    {(() => {
+                      let cumulativePercent = 0
+                      return chartData.map((item, idx) => {
+                        const percent = item.percent / 100
+                        const startAngle = cumulativePercent * 2 * Math.PI
+                        cumulativePercent += percent
+                        const endAngle = cumulativePercent * 2 * Math.PI
+                        
+                        const x1 = 50 + 40 * Math.cos(startAngle - Math.PI / 2)
+                        const y1 = 50 + 40 * Math.sin(startAngle - Math.PI / 2)
+                        const x2 = 50 + 40 * Math.cos(endAngle - Math.PI / 2)
+                        const y2 = 50 + 40 * Math.sin(endAngle - Math.PI / 2)
+                        
+                        const largeArcFlag = percent > 0.5 ? 1 : 0
+                        
+                        const pathData = [
+                          `M 50 50`,
+                          `L ${x1} ${y1}`,
+                          `A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                          `Z`
+                        ].join(' ')
+                        
+                        return (
+                          <path
+                            key={idx}
+                            d={pathData}
+                            fill={item.color}
+                            stroke="#1e293b"
+                            strokeWidth="0.5"
+                          >
+                            <title>{item.name}: {formatCurrency(item.value)} ({formatNumber(item.percent, 1)}%)</title>
+                          </path>
+                        )
+                      })
+                    })()}
+                  </svg>
+                </div>
+                <div className="chart-legend">
+                  {chartData.map((item, idx) => (
+                    <div key={idx} className="legend-item">
+                      <span className="legend-color" style={{ backgroundColor: item.color }}></span>
+                      <span className="legend-label">{item.name}</span>
+                      <span className="legend-value">{formatCurrency(item.value)}</span>
+                      <span className="legend-percent">({formatNumber(item.percent, 1)}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tabel Detalii */}
+          {records.length > 0 && (
             <div className="card">
-              <h3>Detalii per Lucrător ({reports.length} înregistrări)</h3>
+              <div className="card-header-actions">
+                <h3>Detalii per Lucrător ({records.length} înregistrări)</h3>
+                <div className="export-buttons">
+                  <button className="btn btn-sm btn-secondary" onClick={handleExportPDF}>
+                    📄 Export PDF
+                  </button>
+                  <button className="btn btn-sm btn-secondary" onClick={handleExportWord}>
+                    📝 Export Word
+                  </button>
+                  {reportFilters.month && (
+                    <button 
+                      className="btn btn-sm btn-success" 
+                      onClick={handleValidateMonth}
+                      disabled={validating || records.every(r => r.is_validated)}
+                    >
+                      {validating ? 'Se validează...' : '✓ Validează Luna'}
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="table-container">
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Lucrător</th>
+                      <th>Nr. CIM</th>
                       <th>Client</th>
                       <th>Perioadă</th>
                       <th>Ore</th>
-                      <th>Salariu</th>
+                      <th>Cost Salarial</th>
                       <th>Alte Costuri</th>
                       <th>Venit</th>
                       <th>Profit</th>
@@ -580,22 +816,22 @@ function EcoFin() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reports.map(r => {
-                      const venit = Number(r.hours_worked) * Number(r.tarif_orar)
+                    {records.map(r => {
                       const alteCosturi = Number(r.cost_cazare) + Number(r.cost_masa) + 
                                          Number(r.cost_transport) + Number(r.cost_concediu) + 
-                                         Number(r.cheltuieli_indirecte)
+                                         Number(r.cota_indirecte)
                       return (
                         <tr key={r.id}>
                           <td>{r.worker_nume} {r.worker_prenume}</td>
+                          <td className="mono">{r.nr_cim}</td>
                           <td>{r.client_denumire}</td>
                           <td>{months.find(m => m.value === r.month)?.label?.slice(0,3)} {r.year}</td>
-                          <td className="number">{formatNumber(r.hours_worked, 1)}</td>
-                          <td className="number">{formatCurrency(r.salary_cost)}</td>
+                          <td className="number">{formatNumber(r.ore_lucrate, 1)}</td>
+                          <td className="number">{formatCurrency(r.cost_salarial_complet)}</td>
                           <td className="number">{formatCurrency(alteCosturi)}</td>
-                          <td className="number">{formatCurrency(venit)}</td>
-                          <td className={`number ${Number(r.profit_brut) >= 0 ? 'profit' : 'loss'}`}>
-                            {formatCurrency(r.profit_brut)}
+                          <td className="number">{formatCurrency(r.venit_generat)}</td>
+                          <td className={`number ${Number(r.profitabilitate) >= 0 ? 'profit' : 'loss'}`}>
+                            {formatCurrency(r.profitabilitate)}
                           </td>
                           <td>
                             {r.is_validated ? (
@@ -613,7 +849,7 @@ function EcoFin() {
             </div>
           )}
 
-          {reports.length === 0 && reportSummary === null && (
+          {records.length === 0 && reportSummary === null && (
             <div className="empty-state card">
               <p>Selectează filtrele și apasă "Generează Raport" pentru a vedea datele.</p>
             </div>
@@ -625,4 +861,3 @@ function EcoFin() {
 }
 
 export default EcoFin
-

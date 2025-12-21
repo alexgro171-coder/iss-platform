@@ -352,7 +352,31 @@ export const ecoFinAPI = {
     return response.data
   },
 
-  // === RAPOARTE ===
+  // === ÎNREGISTRĂRI PROCESATE (nou) ===
+  getRecords: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/records/?${queryParams}`)
+    return response.data
+  },
+
+  getRecordsSummary: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/records/summary/?${queryParams}`)
+    return response.data
+  },
+
+  validateMonth: async (year, month) => {
+    const response = await api.post('/eco-fin/records/validate-month/', { year, month })
+    return response.data
+  },
+
+  // === RAPOARTE (compatibilitate) ===
   getReports: async (params = {}) => {
     const queryParams = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {
@@ -371,13 +395,37 @@ export const ecoFinAPI = {
     return response.data
   },
 
-  updateReport: async (id, data) => {
-    const response = await api.patch(`/eco-fin/reports/${id}/`, data)
+  // === RAPOARTE NOI ===
+  getReportByClient: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/client/?${queryParams}`)
     return response.data
   },
 
-  deleteReport: async (id) => {
-    await api.delete(`/eco-fin/reports/${id}/`)
+  getReportWorkersByClient: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/workers/?${queryParams}`)
+    return response.data
+  },
+
+  getReportAllClients: async (year, month) => {
+    const response = await api.get(`/eco-fin/report/all/?year=${year}&month=${month}`)
+    return response.data
+  },
+
+  getReportInterval: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/report/interval/?${queryParams}`)
+    return response.data
   },
 
   // === IMPORT ===
@@ -393,8 +441,9 @@ export const ecoFinAPI = {
     return response.data
   },
 
-  validateImport: async (year, month, rows) => {
-    const response = await api.post('/eco-fin/import/validate/', {
+  processImport: async (batchId, year, month, rows) => {
+    const response = await api.post('/eco-fin/import/process/', {
+      batch_id: batchId,
       year,
       month,
       rows
@@ -402,8 +451,52 @@ export const ecoFinAPI = {
     return response.data
   },
 
-  getImportBatches: async () => {
-    const response = await api.get('/eco-fin/import/batches/')
+  // Compatibilitate
+  validateImport: async (year, month, rows) => {
+    const response = await api.post('/eco-fin/import/process/', {
+      year,
+      month,
+      rows
+    })
+    return response.data
+  },
+
+  getImportBatches: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/import/batches/?${queryParams}`)
+    return response.data
+  },
+
+  downloadTemplate: async () => {
+    const response = await api.get('/eco-fin/import/template/', {
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  // === EXPORT ===
+  exportPDF: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/export/pdf/?${queryParams}`, {
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  exportWord: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/export/word/?${queryParams}`, {
+      responseType: 'blob'
+    })
     return response.data
   },
 }
