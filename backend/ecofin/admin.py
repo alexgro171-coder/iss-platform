@@ -1,15 +1,246 @@
+"""
+Eco-Fin Admin
+Configurare Django Admin pentru modulul Eco-Fin.
+"""
 from django.contrib import admin
-from .models import EcoFinSettings, EcoFinMonthlyReport, EcoFinImportBatch
+from django.utils.html import format_html
+from .models import (
+    EcoFinSettings, 
+    EcoFinImportedRow,
+    EcoFinProcessedRecord, 
+    EcoFinImportBatch,
+    EcoFinMonthlyReport  # Compatibilitate
+)
 
 
 @admin.register(EcoFinSettings)
 class EcoFinSettingsAdmin(admin.ModelAdmin):
-    list_display = ('year', 'month', 'cheltuieli_indirecte', 'cost_concediu', 'created_by', 'updated_at')
-    list_filter = ('year', 'month')
+    list_display = (
+        'period_display', 'cheltuieli_indirecte_display', 
+        'cost_concediu_display', 'is_locked', 'created_by', 'updated_at'
+    )
+    list_filter = ('year', 'is_locked')
     search_fields = ('year',)
     ordering = ('-year', '-month')
+    readonly_fields = ('created_at', 'updated_at', 'created_by')
+    
+    fieldsets = (
+        ('Perioadă', {
+            'fields': ('year', 'month')
+        }),
+        ('Setări Financiare', {
+            'fields': ('cheltuieli_indirecte', 'cost_concediu')
+        }),
+        ('Status', {
+            'fields': ('is_locked',)
+        }),
+        ('Audit', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def period_display(self, obj):
+        months = ['', 'Ian', 'Feb', 'Mar', 'Apr', 'Mai', 'Iun', 
+                  'Iul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        icon = '🔒' if obj.is_locked else '📝'
+        return f"{icon} {months[obj.month]} {obj.year}"
+    period_display.short_description = 'Perioadă'
+
+    def cheltuieli_indirecte_display(self, obj):
+        return f"{obj.cheltuieli_indirecte:,.2f} RON"
+    cheltuieli_indirecte_display.short_description = 'Cheltuieli Ind.'
+
+    def cost_concediu_display(self, obj):
+        return f"{obj.cost_concediu:,.2f} RON"
+    cost_concediu_display.short_description = 'Cost Concediu'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def has_change_permission(self, request, obj=None):
+        if obj and obj.is_locked and not request.user.is_superuser:
+            return False
+        return True
 
 
+@admin.register(EcoFinImportedRow)
+class EcoFinImportedRowAdmin(admin.ModelAdmin):
+    list_display = (
+        'row_number', 'nr_cim', 'nume', 'prenume',
+        'salariu_brut_display', 'ore_lucrate', 'cam_display',
+        'status_display', 'worker_link', 'batch'
+    )
+    list_filter = ('status', 'year', 'month', 'batch')
+    search_fields = ('nr_cim', 'nume', 'prenume', 'worker__nume', 'worker__prenume')
+    ordering = ('-batch__created_at', 'row_number')
+    readonly_fields = ('created_at',)
+    raw_id_fields = ('worker', 'client', 'batch')
+
+    def status_display(self, obj):
+        colors = {
+            'raw': '#6b7280',
+            'matched': '#10b981',
+            'error': '#ef4444',
+            'processed': '#3b82f6'
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.status, '#000'),
+            obj.get_status_display()
+        )
+    status_display.short_description = 'Status'
+
+    def salariu_brut_display(self, obj):
+        return f"{obj.salariu_brut:,.2f}"
+    salariu_brut_display.short_description = 'Salariu Brut'
+
+    def cam_display(self, obj):
+        return f"{obj.cam:,.2f}"
+    cam_display.short_description = 'CAM'
+
+    def worker_link(self, obj):
+        if obj.worker:
+            return format_html(
+                '<a href="/admin/iss/worker/{}/change/">{} {}</a>',
+                obj.worker.id, obj.worker.nume, obj.worker.prenume
+            )
+        return '-'
+    worker_link.short_description = 'Lucrător'
+
+
+@admin.register(EcoFinProcessedRecord)
+class EcoFinProcessedRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        'worker_display', 'client', 'period_display',
+        'ore_lucrate', 'salariu_brut_display', 'cam_display',
+        'cost_salariat_total_display', 'profitabilitate_display',
+        'is_validated', 'validated_at'
+    )
+    list_filter = ('year', 'month', 'is_validated', 'client')
+    search_fields = (
+        'worker__nume', 'worker__prenume', 'worker__pasaport_nr',
+        'nr_cim', 'client__denumire'
+    )
+    ordering = ('-year', '-month', 'worker__nume')
+    readonly_fields = (
+        'cost_salarial_complet', 'cost_salariat_total', 
+        'venit_generat', 'profitabilitate',
+        'created_at', 'updated_at', 'validated_at', 'validated_by'
+    )
+    raw_id_fields = ('worker', 'client', 'imported_row')
+    
+    fieldsets = (
+        ('Identificare', {
+            'fields': ('worker', 'client', 'nr_cim', 'imported_row')
+        }),
+        ('Perioadă', {
+            'fields': ('year', 'month')
+        }),
+        ('Date Import', {
+            'fields': ('ore_lucrate', 'salariu_brut', 'cam', 'net', 'retineri', 'rest_plata')
+        }),
+        ('Date Client (copiate)', {
+            'fields': ('tarif_orar', 'cost_cazare', 'cost_masa', 'cost_transport')
+        }),
+        ('Setări Globale (copiate)', {
+            'fields': ('cota_indirecte', 'cost_concediu')
+        }),
+        ('Calcule (auto)', {
+            'fields': (
+                'cost_salarial_complet', 'cost_salariat_total', 
+                'venit_generat', 'profitabilitate'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Validare', {
+            'fields': ('is_validated', 'validated_at', 'validated_by')
+        }),
+        ('Observații', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
+        }),
+        ('Audit', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def worker_display(self, obj):
+        return f"{obj.worker.nume} {obj.worker.prenume}"
+    worker_display.short_description = 'Lucrător'
+
+    def period_display(self, obj):
+        return f"{obj.month:02d}/{obj.year}"
+    period_display.short_description = 'Perioadă'
+
+    def salariu_brut_display(self, obj):
+        return f"{obj.salariu_brut:,.2f}"
+    salariu_brut_display.short_description = 'Salariu Brut'
+
+    def cam_display(self, obj):
+        return f"{obj.cam:,.2f}"
+    cam_display.short_description = 'CAM'
+
+    def cost_salariat_total_display(self, obj):
+        return f"{obj.cost_salariat_total:,.2f}"
+    cost_salariat_total_display.short_description = 'Cost Total'
+
+    def profitabilitate_display(self, obj):
+        color = '#10b981' if obj.profitabilitate >= 0 else '#ef4444'
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{:,.2f} RON</span>',
+            color, obj.profitabilitate
+        )
+    profitabilitate_display.short_description = 'Profit'
+
+    def has_change_permission(self, request, obj=None):
+        if obj and obj.is_validated:
+            return request.user.is_superuser
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.is_validated:
+            return request.user.is_superuser
+        return True
+
+
+@admin.register(EcoFinImportBatch)
+class EcoFinImportBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        'filename', 'period_display', 'status_display',
+        'total_rows', 'matched_rows', 'error_rows', 'processed_rows',
+        'imported_by', 'created_at'
+    )
+    list_filter = ('status', 'year', 'month')
+    search_fields = ('filename',)
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'validated_at')
+
+    def period_display(self, obj):
+        return f"{obj.month:02d}/{obj.year}"
+    period_display.short_description = 'Perioadă'
+
+    def status_display(self, obj):
+        colors = {
+            'pending': '#6b7280',
+            'processing': '#f59e0b',
+            'preview': '#3b82f6',
+            'validated': '#10b981',
+            'failed': '#ef4444',
+            'cancelled': '#9ca3af'
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.status, '#000'),
+            obj.get_status_display()
+        )
+    status_display.short_description = 'Status'
+
+
+# Compatibilitate cu modelul vechi
 @admin.register(EcoFinMonthlyReport)
 class EcoFinMonthlyReportAdmin(admin.ModelAdmin):
     list_display = (
@@ -23,23 +254,11 @@ class EcoFinMonthlyReportAdmin(admin.ModelAdmin):
     readonly_fields = ('profit_brut', 'created_at', 'updated_at')
     
     def has_change_permission(self, request, obj=None):
-        # Doar Admin poate modifica rapoarte validate
         if obj and obj.is_validated:
             return request.user.is_superuser
         return True
 
     def has_delete_permission(self, request, obj=None):
-        # Doar Admin poate șterge rapoarte validate
         if obj and obj.is_validated:
             return request.user.is_superuser
         return True
-
-
-@admin.register(EcoFinImportBatch)
-class EcoFinImportBatchAdmin(admin.ModelAdmin):
-    list_display = ('filename', 'year', 'month', 'status', 'total_rows', 'successful_rows', 'failed_rows', 'imported_by', 'created_at')
-    list_filter = ('status', 'year', 'month')
-    search_fields = ('filename',)
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at',)
-
