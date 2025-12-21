@@ -600,20 +600,31 @@ function EcoFin() {
                     {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
                 </div>
-                <div className="form-group file-input">
-                  <label>Fișier Excel</label>
-                  <input type="file" accept=".xlsx,.xls" onChange={handleFileSelect} />
+              </div>
+              
+              <div className="form-row file-row">
+                <div className="form-group file-input-group">
+                  <label>📁 Selectează Fișier Excel pentru Import</label>
+                  <input 
+                    type="file" 
+                    accept=".xlsx,.xls" 
+                    onChange={handleFileSelect}
+                    className="file-input-field"
+                  />
+                  {importFile && (
+                    <span className="file-selected">✓ {importFile.name}</span>
+                  )}
                 </div>
-                <div className="form-group">
-                  <label>&nbsp;</label>
-                  <button 
-                    className="btn btn-primary" 
-                    onClick={handleUploadPreview}
-                    disabled={!importFile || importing}
-                  >
-                    {importing ? 'Se procesează...' : '📋 Generează Preview'}
-                  </button>
-                </div>
+              </div>
+              
+              <div className="form-row">
+                <button 
+                  className="btn btn-primary btn-upload" 
+                  onClick={handleUploadPreview}
+                  disabled={!importFile || importing}
+                >
+                  {importing ? '⏳ Se procesează...' : '📋 Generează Preview'}
+                </button>
               </div>
             </div>
           </div>
