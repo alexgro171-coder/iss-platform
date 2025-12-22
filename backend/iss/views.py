@@ -1405,56 +1405,54 @@ class TemplateDocumentViewSet(viewsets.ModelViewSet):
 
     def _convert_to_pdf(self, docx_buffer):
         """
-        Convertește documentul Word la PDF.
+        Convertește documentul Word la PDF folosind LibreOffice.
+        Păstrează formatarea și paginația template-ului.
         Returnează None dacă conversia eșuează.
         """
+        import subprocess
+        import tempfile
+        import os
+        
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.pdfgen import canvas
-            from docx import Document as DocxDocument
-            
-            # Re-încărcăm documentul din buffer
-            docx_buffer.seek(0)
-            doc = DocxDocument(docx_buffer)
-            
-            pdf_buffer = BytesIO()
-            c = canvas.Canvas(pdf_buffer, pagesize=A4)
-            width, height = A4
-            
-            y_position = height - 50
-            line_height = 14
-            
-            for paragraph in doc.paragraphs:
-                text = paragraph.text
-                if text.strip():
-                    # Wrap text dacă e prea lung
-                    words = text.split()
-                    current_line = ""
-                    
-                    for word in words:
-                        test_line = current_line + " " + word if current_line else word
-                        if len(test_line) * 7 > width - 100:  # Aproximare simplă
-                            c.drawString(50, y_position, current_line)
-                            y_position -= line_height
-                            current_line = word
-                        else:
-                            current_line = test_line
-                    
-                    if current_line:
-                        c.drawString(50, y_position, current_line)
-                        y_position -= line_height
+            # Creăm un director temporar pentru conversie
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Salvăm documentul Word într-un fișier temporar
+                docx_path = os.path.join(temp_dir, 'document.docx')
+                docx_buffer.seek(0)
+                with open(docx_path, 'wb') as f:
+                    f.write(docx_buffer.read())
                 
-                y_position -= 5  # Spațiu între paragrafe
+                # Folosim LibreOffice pentru conversie
+                # --headless = fără interfață grafică
+                # --convert-to pdf = conversie la PDF
+                # --outdir = directorul de output
+                result = subprocess.run([
+                    'libreoffice',
+                    '--headless',
+                    '--convert-to', 'pdf',
+                    '--outdir', temp_dir,
+                    docx_path
+                ], capture_output=True, text=True, timeout=60)
                 
-                # Pagină nouă dacă e nevoie
-                if y_position < 50:
-                    c.showPage()
-                    y_position = height - 50
-            
-            c.save()
-            pdf_buffer.seek(0)
-            return pdf_buffer
-            
+                if result.returncode != 0:
+                    print(f"LibreOffice error: {result.stderr}")
+                    return None
+                
+                # Citim PDF-ul generat
+                pdf_path = os.path.join(temp_dir, 'document.pdf')
+                if os.path.exists(pdf_path):
+                    pdf_buffer = BytesIO()
+                    with open(pdf_path, 'rb') as f:
+                        pdf_buffer.write(f.read())
+                    pdf_buffer.seek(0)
+                    return pdf_buffer
+                else:
+                    print("PDF file not created by LibreOffice")
+                    return None
+                    
+        except subprocess.TimeoutExpired:
+            print("LibreOffice conversion timeout")
+            return None
         except Exception as e:
             print(f"Eroare la conversia PDF: {e}")
             return None

@@ -5,10 +5,14 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Dependențe sistem pentru Postgres (psycopg2)
+# Dependențe sistem pentru Postgres (psycopg2) și LibreOffice pentru conversie Word->PDF
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    libreoffice-writer \
+    libreoffice-common \
+    fonts-liberation \
+    fonts-dejavu \
   && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
