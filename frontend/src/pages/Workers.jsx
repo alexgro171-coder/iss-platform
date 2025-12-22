@@ -115,6 +115,74 @@ function Workers() {
     }
   }
 
+  // Export Excel
+  const handleExportExcel = async () => {
+    try {
+      const cleanFilters = {}
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) cleanFilters[key] = value
+      })
+      
+      const params = new URLSearchParams(cleanFilters).toString()
+      const token = localStorage.getItem('access_token')
+      
+      const response = await fetch(`/api/workers/export_excel/?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Eroare la export')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `lucratori_${new Date().toISOString().slice(0,10)}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      alert('Eroare la export: ' + error.message)
+    }
+  }
+
+  // Export PDF
+  const handleExportPDF = async () => {
+    try {
+      const cleanFilters = {}
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) cleanFilters[key] = value
+      })
+      
+      const params = new URLSearchParams(cleanFilters).toString()
+      const token = localStorage.getItem('access_token')
+      
+      const response = await fetch(`/api/workers/export_pdf/?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Eroare la export')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `lucratori_${new Date().toISOString().slice(0,10)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      alert('Eroare la export: ' + error.message)
+    }
+  }
+
   // Statusuri disponibile
   const statusOptions = [
     'Aviz solicitat',
@@ -157,15 +225,15 @@ function Workers() {
           <p>{workers.length} înregistrări</p>
         </div>
         <div className="header-actions">
-          <button className="btn btn-secondary" onClick={() => alert('Export Excel - în dezvoltare')}>
+          <button className="btn btn-secondary" onClick={handleExportExcel}>
             📊 Export Excel
           </button>
-          <button className="btn btn-secondary" onClick={() => alert('Export PDF - în dezvoltare')}>
+          <button className="btn btn-secondary" onClick={handleExportPDF}>
             📄 Export PDF
           </button>
-        <Link to="/workers/new" className="btn btn-primary">
-          + Adaugă Lucrător
-        </Link>
+          <Link to="/workers/new" className="btn btn-primary">
+            + Adaugă Lucrător
+          </Link>
         </div>
       </header>
 
