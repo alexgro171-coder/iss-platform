@@ -1204,7 +1204,7 @@ class TemplateDocumentViewSet(viewsets.ModelViewSet):
             )
         
         # Obținem lucrătorul cu toate relațiile
-        worker = Worker.objects.select_related('client', 'cod_cor_ref').get(pk=worker_id)
+        worker = Worker.objects.select_related('client', 'cod_cor_ref', 'ambasada').get(pk=worker_id)
         
         # Construim maparea placeholder-elor
         placeholder_map = self._build_placeholder_map(worker)
