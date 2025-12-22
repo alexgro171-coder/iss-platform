@@ -11,7 +11,7 @@ from django.http import HttpResponse
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import openpyxl
 from io import BytesIO
 
@@ -290,7 +290,7 @@ class EcoFinImportViewSet(viewsets.ViewSet):
     ViewSet pentru import Excel și procesare.
     """
     permission_classes = [IsManagementOrAdmin]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     # Mapare coloane Excel conform specificației
     COLUMN_MAPPING = {
