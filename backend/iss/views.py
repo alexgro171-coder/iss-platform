@@ -836,8 +836,8 @@ class WorkerViewSet(viewsets.ModelViewSet):
         # Header-uri
         headers = [
             'Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Status',
-            'Client', 'Cod COR', 'Funcție', 'Data WP', 'Data Viză', 'Data CIM',
-            'CNP', 'Data Intrare RO'
+            'Client', 'Cod COR', 'Funcție', 'Nr. CIM', 'Data WP', 'Data Viză', 
+            'Data CIM', 'CNP', 'Data Intrare RO'
         ]
         
         for col, header in enumerate(headers, 1):
@@ -859,11 +859,12 @@ class WorkerViewSet(viewsets.ModelViewSet):
             ws.cell(row=row_idx, column=7, value=worker.client.denumire if worker.client else '')
             ws.cell(row=row_idx, column=8, value=worker.cod_cor_ref.cod if worker.cod_cor_ref else (worker.cod_cor or ''))
             ws.cell(row=row_idx, column=9, value=worker.functie or '')
-            ws.cell(row=row_idx, column=10, value=str(worker.data_programare_wp) if worker.data_programare_wp else '')
-            ws.cell(row=row_idx, column=11, value=str(worker.data_programare_interviu) if worker.data_programare_interviu else '')
-            ws.cell(row=row_idx, column=12, value=str(worker.data_emitere_cim) if worker.data_emitere_cim else '')
-            ws.cell(row=row_idx, column=13, value=worker.cnp or '')
-            ws.cell(row=row_idx, column=14, value=str(worker.data_intrare_ro) if worker.data_intrare_ro else '')
+            ws.cell(row=row_idx, column=10, value=worker.cim_nr or '')
+            ws.cell(row=row_idx, column=11, value=str(worker.data_programare_wp) if worker.data_programare_wp else '')
+            ws.cell(row=row_idx, column=12, value=str(worker.data_programare_interviu) if worker.data_programare_interviu else '')
+            ws.cell(row=row_idx, column=13, value=str(worker.data_emitere_cim) if worker.data_emitere_cim else '')
+            ws.cell(row=row_idx, column=14, value=worker.cnp or '')
+            ws.cell(row=row_idx, column=15, value=str(worker.data_intrare_ro) if worker.data_intrare_ro else '')
         
         # Ajustăm lățimea coloanelor
         for col in ws.columns:
@@ -945,7 +946,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
         elements.append(Spacer(1, 20))
         
         # Tabel
-        headers = ['Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Status', 'Client']
+        headers = ['Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Nr. CIM', 'Status', 'Client']
         data = [headers]
         
         for idx, worker in enumerate(qs[:100], 1):  # Limită la 100 pentru PDF
@@ -955,6 +956,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 worker.prenume or '',
                 worker.cetatenie or '',
                 worker.pasaport_nr or '',
+                worker.cim_nr or '',
                 worker.status or '',
                 worker.client.denumire if worker.client else ''
             ])
