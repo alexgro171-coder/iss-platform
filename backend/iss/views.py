@@ -636,7 +636,7 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 pasaport = row_data.get('pasaport_nr')
                 
                 # Skip rânduri fără date obligatorii
-                if not nume or not pasaport:
+                if not nume or not prenume or not pasaport:
                     # Dacă are alte date dar lipsesc câmpuri obligatorii
                     if any(v for v in row_data.values() if v):
                         results['errors'] += 1
