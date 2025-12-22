@@ -239,7 +239,7 @@ function Clients() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Tarif orar (€)</label>
+                  <label>Tarif orar (RON)</label>
                   <input
                     type="number"
                     name="tarif_orar"
@@ -260,7 +260,7 @@ function Clients() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Cost cazare (€)</label>
+                  <label>Cost cazare (RON)</label>
                   <input
                     type="number"
                     name="cazare_cost"
@@ -271,7 +271,7 @@ function Clients() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Cost masă (€)</label>
+                  <label>Cost masă (RON)</label>
                   <input
                     type="number"
                     name="masa_cost"
@@ -282,7 +282,7 @@ function Clients() {
                 </div>
                 
                 <div className="form-group">
-                  <label>Cost transport (€)</label>
+                  <label>Cost transport (RON)</label>
                   <input
                     type="number"
                     name="transport_cost"
@@ -328,7 +328,7 @@ function Clients() {
                       {[client.oras, client.judet, client.tara].filter(Boolean).join(', ') || '-'}
                     </td>
                     <td className="mono">{client.cod_fiscal || '-'}</td>
-                    <td>{client.tarif_orar ? `${client.tarif_orar} €` : '-'}</td>
+                    <td>{client.tarif_orar ? `${client.tarif_orar} RON` : '-'}</td>
                     <td>
                       <div className="actions">
                         <button
