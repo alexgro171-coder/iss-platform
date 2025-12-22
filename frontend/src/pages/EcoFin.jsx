@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { ecoFinAPI, clientsAPI } from '../services/api'
+import EcoFinBilling from './EcoFinBilling'
 import './EcoFin.css'
 
 /**
@@ -434,6 +435,19 @@ function EcoFin() {
           onClick={() => setActiveTab('financial')}
         >
           💵 Financiar
+        </button>
+        <div className="tab-separator"></div>
+        <button 
+          className={`tab ${activeTab === 'billing' ? 'active' : ''}`}
+          onClick={() => setActiveTab('billing')}
+        >
+          🧾 Facturare
+        </button>
+        <button 
+          className={`tab ${activeTab === 'billing-reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('billing-reports')}
+        >
+          📑 Rapoarte Facturare
         </button>
       </div>
 
@@ -1177,6 +1191,20 @@ function EcoFin() {
               <p>Selectează filtrele și apasă "Generează Raport" pentru a vedea datele financiare.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: FACTURARE */}
+      {activeTab === 'billing' && (
+        <div className="tab-content">
+          <EcoFinBilling activeTab="billing" />
+        </div>
+      )}
+
+      {/* TAB: RAPOARTE FACTURARE */}
+      {activeTab === 'billing-reports' && (
+        <div className="tab-content">
+          <EcoFinBilling activeTab="billing-reports" />
         </div>
       )}
     </div>

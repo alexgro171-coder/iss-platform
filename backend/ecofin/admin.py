@@ -9,7 +9,12 @@ from .models import (
     EcoFinImportedRow,
     EcoFinProcessedRecord, 
     EcoFinImportBatch,
-    EcoFinMonthlyReport  # Compatibilitate
+    EcoFinMonthlyReport,  # Compatibilitate
+    # Billing models
+    BillingInvoice,
+    BillingInvoiceLine,
+    BillingSyncLog,
+    BillingEmailLog
 )
 
 
@@ -262,3 +267,192 @@ class EcoFinMonthlyReportAdmin(admin.ModelAdmin):
         if obj and obj.is_validated:
             return request.user.is_superuser
         return True
+
+
+# ==========================================
+# BILLING ADMIN
+# ==========================================
+
+class BillingInvoiceLineInline(admin.TabularInline):
+    model = BillingInvoiceLine
+    extra = 0
+    readonly_fields = ('line_total', 'line_vat')
+
+
+@admin.register(BillingInvoice)
+class BillingInvoiceAdmin(admin.ModelAdmin):
+    list_display = (
+        'invoice_number_display', 'client', 'period_display',
+        'subtotal_display', 'vat_total_display', 'total_display',
+        'status_display', 'payment_status_display',
+        'paid_display', 'due_display',
+        'issue_date', 'created_at'
+    )
+    list_filter = ('status', 'payment_status', 'year', 'month', 'client')
+    search_fields = (
+        'client__denumire', 'smartbill_series', 'smartbill_number'
+    )
+    ordering = ('-year', '-month', '-issue_date')
+    readonly_fields = (
+        'smartbill_document_id', 'smartbill_series', 'smartbill_number',
+        'due_amount', 'pdf_path',
+        'created_by', 'created_at', 'updated_at',
+        'last_email_sent_at', 'email_sent_to', 'email_sent_count'
+    )
+    raw_id_fields = ('client',)
+    inlines = [BillingInvoiceLineInline]
+    
+    fieldsets = (
+        ('Client & Perioadă', {
+            'fields': ('client', 'year', 'month')
+        }),
+        ('SmartBill', {
+            'fields': ('smartbill_series', 'smartbill_number', 'smartbill_document_id', 'issue_date')
+        }),
+        ('Valori', {
+            'fields': ('subtotal', 'vat_total', 'total', 'currency', 'hours_billed', 'hourly_rate')
+        }),
+        ('Status', {
+            'fields': ('status', 'payment_status', 'paid_amount', 'due_amount')
+        }),
+        ('PDF', {
+            'fields': ('pdf_path',),
+            'classes': ('collapse',)
+        }),
+        ('Email', {
+            'fields': ('last_email_sent_at', 'email_sent_to', 'email_sent_count'),
+            'classes': ('collapse',)
+        }),
+        ('Audit', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def period_display(self, obj):
+        return f"{obj.month:02d}/{obj.year}"
+    period_display.short_description = 'Perioadă'
+
+    def subtotal_display(self, obj):
+        return f"{obj.subtotal:,.2f}"
+    subtotal_display.short_description = 'Fără TVA'
+
+    def vat_total_display(self, obj):
+        return f"{obj.vat_total:,.2f}"
+    vat_total_display.short_description = 'TVA'
+
+    def total_display(self, obj):
+        return f"{obj.total:,.2f}"
+    total_display.short_description = 'Total'
+
+    def paid_display(self, obj):
+        return f"{obj.paid_amount:,.2f}"
+    paid_display.short_description = 'Încasat'
+
+    def due_display(self, obj):
+        color = '#ef4444' if obj.due_amount > 0 else '#10b981'
+        return format_html(
+            '<span style="color: {};">{:,.2f}</span>',
+            color, obj.due_amount
+        )
+    due_display.short_description = 'Sold'
+
+    def status_display(self, obj):
+        colors = {
+            'draft': '#6b7280',
+            'issued': '#10b981',
+            'cancelled': '#ef4444'
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.status, '#000'),
+            obj.get_status_display()
+        )
+    status_display.short_description = 'Status'
+
+    def payment_status_display(self, obj):
+        colors = {
+            'unpaid': '#ef4444',
+            'partial': '#f59e0b',
+            'paid': '#10b981'
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.payment_status, '#000'),
+            obj.get_payment_status_display()
+        )
+    payment_status_display.short_description = 'Încasare'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    def has_change_permission(self, request, obj=None):
+        # Facturile emise pot fi modificate doar de superuser
+        if obj and obj.status == 'issued' and not request.user.is_superuser:
+            return False
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        # Facturile emise pot fi șterse doar de superuser
+        if obj and obj.status == 'issued' and not request.user.is_superuser:
+            return False
+        return True
+
+
+@admin.register(BillingSyncLog)
+class BillingSyncLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'sync_started_at', 'sync_finished_at',
+        'status_display', 'user',
+        'requested_from_ts', 'requested_to_ts',
+        'results_summary'
+    )
+    list_filter = ('status',)
+    ordering = ('-sync_started_at',)
+    readonly_fields = (
+        'sync_started_at', 'sync_finished_at',
+        'requested_from_ts', 'requested_to_ts',
+        'user', 'status', 'result_counts', 'error_message'
+    )
+
+    def status_display(self, obj):
+        colors = {
+            'in_progress': '#f59e0b',
+            'success': '#10b981',
+            'failure': '#ef4444'
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.status, '#000'),
+            obj.get_status_display()
+        )
+    status_display.short_description = 'Status'
+
+    def results_summary(self, obj):
+        if obj.result_counts:
+            return f"Actualizate: {obj.result_counts.get('invoices_updated', 0)}, Erori: {obj.result_counts.get('errors_count', 0)}"
+        return '-'
+    results_summary.short_description = 'Rezultate'
+
+
+@admin.register(BillingEmailLog)
+class BillingEmailLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'sent_at', 'invoice', 'sent_to', 'sent_by', 'status_display'
+    )
+    list_filter = ('status',)
+    search_fields = ('sent_to', 'invoice__smartbill_series', 'invoice__smartbill_number')
+    ordering = ('-sent_at',)
+    readonly_fields = (
+        'sent_at', 'sent_by', 'invoice', 'sent_to', 'subject', 'status', 'error_message'
+    )
+
+    def status_display(self, obj):
+        color = '#10b981' if obj.status == 'sent' else '#ef4444'
+        return format_html(
+            '<span style="color: {};">{}</span>',
+            color, 'Trimis' if obj.status == 'sent' else 'Eșuat'
+        )
+    status_display.short_description = 'Status'

@@ -543,5 +543,102 @@ export const ecoFinAPI = {
   },
 }
 
+// ============================================
+// BILLING API (SmartBill)
+// ============================================
+
+export const billingAPI = {
+  // === CONFIGURARE ===
+  checkConfig: async () => {
+    const response = await api.get('/eco-fin/billing/invoices/check-config/')
+    return response.data
+  },
+
+  // === FACTURI ===
+  getInvoices: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/billing/invoices/?${queryParams}`)
+    return response.data
+  },
+
+  getInvoice: async (id) => {
+    const response = await api.get(`/eco-fin/billing/invoices/${id}/`)
+    return response.data
+  },
+
+  previewInvoice: async (clientId, year, month) => {
+    const response = await api.post('/eco-fin/billing/invoices/preview/', {
+      client_id: clientId,
+      year,
+      month
+    })
+    return response.data
+  },
+
+  issueInvoice: async (data) => {
+    const response = await api.post('/eco-fin/billing/invoices/issue/', data)
+    return response.data
+  },
+
+  downloadInvoicePDF: async (id) => {
+    const response = await api.get(`/eco-fin/billing/invoices/${id}/pdf/`, {
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  sendInvoiceEmail: async (id, emailTo = null) => {
+    const data = emailTo ? { email_to: emailTo } : {}
+    const response = await api.post(`/eco-fin/billing/invoices/${id}/send-email/`, data)
+    return response.data
+  },
+
+  // === SINCRONIZARE PLĂȚI ===
+  syncPayments: async () => {
+    const response = await api.post('/eco-fin/billing/sync/sync-payments/')
+    return response.data
+  },
+
+  getSyncLogs: async () => {
+    const response = await api.get('/eco-fin/billing/sync/sync-logs/')
+    return response.data
+  },
+
+  // === RAPOARTE FACTURARE ===
+  getBillingReportSummary: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/billing/reports/summary/?${queryParams}`)
+    return response.data
+  },
+
+  exportBillingExcel: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/billing/export/excel/?${queryParams}`, {
+      responseType: 'blob'
+    })
+    return response.data
+  },
+
+  exportBillingPDF: async (params = {}) => {
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') queryParams.append(key, value)
+    })
+    const response = await api.get(`/eco-fin/billing/export/pdf/?${queryParams}`, {
+      responseType: 'blob'
+    })
+    return response.data
+  },
+}
+
 export default api
 

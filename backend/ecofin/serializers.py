@@ -1,6 +1,6 @@
 """
 Eco-Fin Serializers
-Serializatori pentru modulul de profitabilitate.
+Serializatori pentru modulul de profitabilitate și facturare.
 """
 from rest_framework import serializers
 from .models import (
@@ -8,7 +8,12 @@ from .models import (
     EcoFinImportedRow, 
     EcoFinProcessedRecord, 
     EcoFinImportBatch,
-    EcoFinMonthlyReport  # Pentru compatibilitate
+    EcoFinMonthlyReport,  # Pentru compatibilitate
+    # Billing models
+    BillingInvoice,
+    BillingInvoiceLine,
+    BillingSyncLog,
+    BillingEmailLog
 )
 
 
@@ -245,3 +250,215 @@ class EcoFinMonthlyReportSerializer(serializers.ModelSerializer):
 
     def get_created_by_username(self, obj):
         return obj.created_by.username if obj.created_by else None
+
+
+# ==========================================
+# BILLING SERIALIZERS
+# ==========================================
+
+class BillingInvoiceLineSerializer(serializers.ModelSerializer):
+    """Serializer pentru linii de factură."""
+    line_type_display = serializers.CharField(source='get_line_type_display', read_only=True)
+    
+    class Meta:
+        model = BillingInvoiceLine
+        fields = [
+            'id', 'invoice', 'description', 
+            'quantity', 'unit_price', 'vat_rate',
+            'line_total', 'line_vat',
+            'line_type', 'line_type_display'
+        ]
+        read_only_fields = ['line_total', 'line_vat']
+
+
+class BillingInvoiceSerializer(serializers.ModelSerializer):
+    """Serializer pentru facturi."""
+    client_denumire = serializers.SerializerMethodField()
+    client_cif = serializers.SerializerMethodField()
+    invoice_number_display = serializers.ReadOnlyField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
+    lines = BillingInvoiceLineSerializer(many=True, read_only=True)
+    created_by_username = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = BillingInvoice
+        fields = [
+            'id', 'client', 'client_denumire', 'client_cif',
+            'year', 'month',
+            'smartbill_document_id', 'smartbill_series', 'smartbill_number',
+            'invoice_number_display',
+            'issue_date',
+            'subtotal', 'vat_total', 'total', 'currency',
+            'hours_billed', 'hourly_rate',
+            'status', 'status_display',
+            'payment_status', 'payment_status_display',
+            'paid_amount', 'due_amount',
+            'last_payment_sync_at',
+            'pdf_path',
+            'created_by', 'created_by_username',
+            'created_at', 'updated_at',
+            'last_email_sent_at', 'email_sent_to', 'email_sent_count',
+            'lines'
+        ]
+        read_only_fields = [
+            'smartbill_document_id', 'smartbill_series', 'smartbill_number',
+            'due_amount', 'payment_status',
+            'pdf_path', 'created_by', 'created_at', 'updated_at',
+            'last_email_sent_at', 'email_sent_to', 'email_sent_count'
+        ]
+
+    def get_client_denumire(self, obj):
+        return obj.client.denumire if obj.client else None
+
+    def get_client_cif(self, obj):
+        return obj.client.cif if obj.client else None
+
+    def get_created_by_username(self, obj):
+        return obj.created_by.username if obj.created_by else None
+
+
+class BillingInvoiceListSerializer(serializers.ModelSerializer):
+    """Serializer simplificat pentru lista de facturi."""
+    client_denumire = serializers.SerializerMethodField()
+    invoice_number_display = serializers.ReadOnlyField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
+    
+    class Meta:
+        model = BillingInvoice
+        fields = [
+            'id', 'client', 'client_denumire',
+            'year', 'month',
+            'smartbill_series', 'smartbill_number', 'invoice_number_display',
+            'issue_date',
+            'subtotal', 'vat_total', 'total',
+            'status', 'status_display',
+            'payment_status', 'payment_status_display',
+            'paid_amount', 'due_amount',
+            'pdf_path',
+            'created_at'
+        ]
+
+    def get_client_denumire(self, obj):
+        return obj.client.denumire if obj.client else None
+
+
+class BillingSyncLogSerializer(serializers.ModelSerializer):
+    """Serializer pentru log-uri de sincronizare."""
+    user_username = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = BillingSyncLog
+        fields = [
+            'id',
+            'sync_started_at', 'sync_finished_at',
+            'requested_from_ts', 'requested_to_ts',
+            'user', 'user_username',
+            'status', 'status_display',
+            'result_counts', 'error_message'
+        ]
+
+    def get_user_username(self, obj):
+        return obj.user.username if obj.user else None
+
+
+class BillingEmailLogSerializer(serializers.ModelSerializer):
+    """Serializer pentru log-uri de email."""
+    sent_by_username = serializers.SerializerMethodField()
+    invoice_number = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = BillingEmailLog
+        fields = [
+            'id', 'invoice', 'invoice_number',
+            'sent_at', 'sent_by', 'sent_by_username',
+            'sent_to', 'subject',
+            'status', 'error_message'
+        ]
+
+    def get_sent_by_username(self, obj):
+        return obj.sent_by.username if obj.sent_by else None
+
+    def get_invoice_number(self, obj):
+        return obj.invoice.invoice_number_display if obj.invoice else None
+
+
+# ==========================================
+# REQUEST/RESPONSE SERIALIZERS
+# ==========================================
+
+class IssueInvoiceRequestSerializer(serializers.Serializer):
+    """Serializer pentru cererea de emitere factură."""
+    client_id = serializers.IntegerField()
+    year = serializers.IntegerField(min_value=2020, max_value=2100)
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    confirm_hours_agreed = serializers.BooleanField()
+    mode = serializers.ChoiceField(
+        choices=['standard', 'difference', 'extra_services'],
+        default='standard'
+    )
+    extra_lines = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list
+    )
+    issue_difference = serializers.BooleanField(required=False, default=False)
+
+
+class InvoicePreviewSerializer(serializers.Serializer):
+    """Serializer pentru preview factură înainte de emitere."""
+    client_id = serializers.IntegerField()
+    client_name = serializers.CharField()
+    year = serializers.IntegerField()
+    month = serializers.IntegerField()
+    month_name = serializers.CharField()
+    
+    # Date calculate
+    total_hours = serializers.DecimalField(max_digits=10, decimal_places=2)
+    hourly_rate = serializers.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Linii factură
+    lines = serializers.ListField(child=serializers.DictField())
+    
+    # Totaluri
+    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2)
+    vat_rate = serializers.DecimalField(max_digits=5, decimal_places=2)
+    vat_total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Facturi existente pentru aceeași lună
+    existing_invoices = serializers.ListField(child=serializers.DictField())
+    already_billed_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Avertismente/info
+    warnings = serializers.ListField(child=serializers.CharField())
+
+
+class SyncPaymentsResponseSerializer(serializers.Serializer):
+    """Serializer pentru răspunsul sincronizării plăților."""
+    success = serializers.BooleanField()
+    sync_log_id = serializers.IntegerField()
+    invoices_updated = serializers.IntegerField()
+    payments_found = serializers.IntegerField()
+    errors = serializers.ListField(child=serializers.CharField())
+    message = serializers.CharField()
+
+
+class SendEmailRequestSerializer(serializers.Serializer):
+    """Serializer pentru cererea de trimitere email."""
+    email_to = serializers.EmailField(required=False)  # Opțional, default din client
+
+
+class BillingReportFilterSerializer(serializers.Serializer):
+    """Serializer pentru filtrele de raport facturare."""
+    year = serializers.IntegerField(required=False)
+    month = serializers.IntegerField(required=False, min_value=1, max_value=12)
+    client_id = serializers.IntegerField(required=False)
+    payment_status = serializers.ChoiceField(
+        choices=['all', 'unpaid', 'partial', 'paid'],
+        required=False,
+        default='all'
+    )
+    last_months = serializers.IntegerField(required=False, min_value=1, max_value=12)

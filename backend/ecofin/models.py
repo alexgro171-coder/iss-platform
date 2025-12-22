@@ -486,3 +486,307 @@ class EcoFinMonthlyReport(models.Model):
     def save(self, *args, **kwargs):
         self.calculate_profit()
         super().save(*args, **kwargs)
+
+
+# =============================================================================
+# MODELE FACTURARE SMARTBILL
+# =============================================================================
+
+class BillingInvoice(models.Model):
+    """
+    Factură emisă prin SmartBill.
+    Stochează datele facturii + PDF-ul + status încasare.
+    """
+    class PaymentStatus(models.TextChoices):
+        UNPAID = 'unpaid', 'Neîncasată'
+        PARTIAL = 'partial', 'Parțial încasată'
+        PAID = 'paid', 'Încasată'
+    
+    class InvoiceStatus(models.TextChoices):
+        DRAFT = 'draft', 'Draft'
+        ISSUED = 'issued', 'Emisă'
+        CANCELLED = 'cancelled', 'Anulată'
+    
+    # Client
+    client = models.ForeignKey(
+        'iss.Client',
+        on_delete=models.PROTECT,
+        related_name='billing_invoices'
+    )
+    
+    # Perioadă facturată
+    year = models.PositiveIntegerField(
+        validators=[MinValueValidator(2020), MaxValueValidator(2100)]
+    )
+    month = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(12)]
+    )
+    
+    # Date SmartBill
+    smartbill_document_id = models.CharField(
+        max_length=100, blank=True,
+        help_text="ID document SmartBill"
+    )
+    smartbill_series = models.CharField(
+        max_length=20, blank=True,
+        help_text="Seria facturii SmartBill"
+    )
+    smartbill_number = models.CharField(
+        max_length=20, blank=True,
+        help_text="Numărul facturii SmartBill"
+    )
+    issue_date = models.DateField(
+        null=True, blank=True,
+        help_text="Data emiterii facturii"
+    )
+    
+    # Valori
+    subtotal = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Valoare fără TVA"
+    )
+    vat_total = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Total TVA"
+    )
+    total = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Total cu TVA"
+    )
+    currency = models.CharField(
+        max_length=3, default='RON',
+        help_text="Moneda facturii"
+    )
+    
+    # Date calculate pentru facturare (snapshot)
+    hours_billed = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        help_text="Ore facturate"
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        help_text="Tarif orar aplicat"
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=InvoiceStatus.choices,
+        default=InvoiceStatus.DRAFT
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.UNPAID
+    )
+    
+    # Încasări
+    paid_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Sumă încasată"
+    )
+    due_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Sumă de încasat (sold)"
+    )
+    last_payment_sync_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Ultima sincronizare plăți din SmartBill"
+    )
+    
+    # PDF stocat local
+    pdf_path = models.CharField(
+        max_length=500, blank=True,
+        help_text="Calea către PDF-ul facturii în storage"
+    )
+    
+    # Audit
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='billing_invoices_created'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Email tracking
+    last_email_sent_at = models.DateTimeField(null=True, blank=True)
+    email_sent_to = models.EmailField(blank=True)
+    email_sent_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "Factură SmartBill"
+        verbose_name_plural = "Facturi SmartBill"
+        ordering = ['-year', '-month', '-issue_date']
+        # Permite mai multe facturi pe aceeași lună (diferențe, servicii extra)
+
+    def __str__(self):
+        series_num = f"{self.smartbill_series}{self.smartbill_number}" if self.smartbill_series else "DRAFT"
+        return f"Factură {series_num} - {self.client.denumire} ({self.month:02d}/{self.year})"
+    
+    def save(self, *args, **kwargs):
+        # Calculează due_amount
+        self.due_amount = self.total - self.paid_amount
+        # Actualizează payment_status
+        if self.paid_amount >= self.total:
+            self.payment_status = self.PaymentStatus.PAID
+        elif self.paid_amount > 0:
+            self.payment_status = self.PaymentStatus.PARTIAL
+        else:
+            self.payment_status = self.PaymentStatus.UNPAID
+        super().save(*args, **kwargs)
+    
+    @property
+    def invoice_number_display(self):
+        """Returnează serie + număr pentru afișare."""
+        if self.smartbill_series and self.smartbill_number:
+            return f"{self.smartbill_series}{self.smartbill_number}"
+        return "DRAFT"
+
+
+class BillingInvoiceLine(models.Model):
+    """
+    Linie de factură (serviciu facturat).
+    """
+    invoice = models.ForeignKey(
+        BillingInvoice,
+        on_delete=models.CASCADE,
+        related_name='lines'
+    )
+    description = models.CharField(
+        max_length=500,
+        help_text="Descrierea serviciului"
+    )
+    quantity = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('1.00'),
+        help_text="Cantitate"
+    )
+    unit_price = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Preț unitar fără TVA"
+    )
+    vat_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('21.00'),
+        help_text="Cota TVA (%)"
+    )
+    line_total = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Total linie fără TVA"
+    )
+    line_vat = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="TVA linie"
+    )
+    
+    # Tip linie
+    LINE_TYPE_CHOICES = [
+        ('standard', 'Serviciu standard'),
+        ('difference', 'Diferență'),
+        ('extra', 'Serviciu suplimentar'),
+    ]
+    line_type = models.CharField(
+        max_length=20,
+        choices=LINE_TYPE_CHOICES,
+        default='standard'
+    )
+
+    class Meta:
+        verbose_name = "Linie factură"
+        verbose_name_plural = "Linii factură"
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.description} - {self.line_total} RON"
+    
+    def save(self, *args, **kwargs):
+        # Calculează totalurile
+        self.line_total = self.quantity * self.unit_price
+        self.line_vat = self.line_total * (self.vat_rate / 100)
+        super().save(*args, **kwargs)
+
+
+class BillingSyncLog(models.Model):
+    """
+    Log sincronizare plăți din SmartBill.
+    Folosit pentru sync incremental.
+    """
+    class Status(models.TextChoices):
+        IN_PROGRESS = 'in_progress', 'În desfășurare'
+        SUCCESS = 'success', 'Succes'
+        FAILURE = 'failure', 'Eșuat'
+    
+    sync_started_at = models.DateTimeField(auto_now_add=True)
+    sync_finished_at = models.DateTimeField(null=True, blank=True)
+    
+    # Interval cerut
+    requested_from_ts = models.DateTimeField(
+        help_text="Timestamp de start pentru cererea API"
+    )
+    requested_to_ts = models.DateTimeField(
+        help_text="Timestamp de final pentru cererea API"
+    )
+    
+    # User
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='billing_sync_logs'
+    )
+    
+    # Rezultate
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.IN_PROGRESS
+    )
+    result_counts = models.JSONField(
+        default=dict, blank=True,
+        help_text="Statistici: invoices_updated, payments_found, errors"
+    )
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Log sincronizare plăți"
+        verbose_name_plural = "Log-uri sincronizare plăți"
+        ordering = ['-sync_started_at']
+
+    def __str__(self):
+        return f"Sync {self.sync_started_at.strftime('%Y-%m-%d %H:%M')} - {self.get_status_display()}"
+
+
+class BillingEmailLog(models.Model):
+    """
+    Log trimitere email cu factură.
+    """
+    invoice = models.ForeignKey(
+        BillingInvoice,
+        on_delete=models.CASCADE,
+        related_name='email_logs'
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+    sent_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    sent_to = models.EmailField()
+    subject = models.CharField(max_length=500)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('sent', 'Trimis'),
+            ('failed', 'Eșuat'),
+        ],
+        default='sent'
+    )
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Log email factură"
+        verbose_name_plural = "Log-uri email facturi"
+        ordering = ['-sent_at']
+
+    def __str__(self):
+        return f"Email {self.invoice} -> {self.sent_to} ({self.sent_at.strftime('%Y-%m-%d %H:%M')})"
