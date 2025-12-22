@@ -836,8 +836,8 @@ class WorkerViewSet(viewsets.ModelViewSet):
         # Header-uri
         headers = [
             'Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Status',
-            'Client', 'Cod COR', 'Data WP', 'Data Viză', 'Data CIM',
-            'CNP', 'Data Intrare RO', 'Telefon', 'Email'
+            'Client', 'Cod COR', 'Funcție', 'Data WP', 'Data Viză', 'Data CIM',
+            'CNP', 'Data Intrare RO'
         ]
         
         for col, header in enumerate(headers, 1):
@@ -851,20 +851,19 @@ class WorkerViewSet(viewsets.ModelViewSet):
         # Date
         for row_idx, worker in enumerate(qs, 2):
             ws.cell(row=row_idx, column=1, value=row_idx - 1)
-            ws.cell(row=row_idx, column=2, value=worker.nume)
-            ws.cell(row=row_idx, column=3, value=worker.prenume)
-            ws.cell(row=row_idx, column=4, value=worker.cetatenie)
-            ws.cell(row=row_idx, column=5, value=worker.pasaport_nr)
-            ws.cell(row=row_idx, column=6, value=worker.status)
+            ws.cell(row=row_idx, column=2, value=worker.nume or '')
+            ws.cell(row=row_idx, column=3, value=worker.prenume or '')
+            ws.cell(row=row_idx, column=4, value=worker.cetatenie or '')
+            ws.cell(row=row_idx, column=5, value=worker.pasaport_nr or '')
+            ws.cell(row=row_idx, column=6, value=worker.status or '')
             ws.cell(row=row_idx, column=7, value=worker.client.denumire if worker.client else '')
-            ws.cell(row=row_idx, column=8, value=worker.cod_cor_ref.cod if worker.cod_cor_ref else worker.cod_cor)
-            ws.cell(row=row_idx, column=9, value=str(worker.data_programare_wp) if worker.data_programare_wp else '')
-            ws.cell(row=row_idx, column=10, value=str(worker.data_programare_interviu) if worker.data_programare_interviu else '')
-            ws.cell(row=row_idx, column=11, value=str(worker.data_emitere_cim) if worker.data_emitere_cim else '')
-            ws.cell(row=row_idx, column=12, value=worker.cnp)
-            ws.cell(row=row_idx, column=13, value=str(worker.data_intrare_ro) if worker.data_intrare_ro else '')
-            ws.cell(row=row_idx, column=14, value=worker.telefon)
-            ws.cell(row=row_idx, column=15, value=worker.email)
+            ws.cell(row=row_idx, column=8, value=worker.cod_cor_ref.cod if worker.cod_cor_ref else (worker.cod_cor or ''))
+            ws.cell(row=row_idx, column=9, value=worker.functie or '')
+            ws.cell(row=row_idx, column=10, value=str(worker.data_programare_wp) if worker.data_programare_wp else '')
+            ws.cell(row=row_idx, column=11, value=str(worker.data_programare_interviu) if worker.data_programare_interviu else '')
+            ws.cell(row=row_idx, column=12, value=str(worker.data_emitere_cim) if worker.data_emitere_cim else '')
+            ws.cell(row=row_idx, column=13, value=worker.cnp or '')
+            ws.cell(row=row_idx, column=14, value=str(worker.data_intrare_ro) if worker.data_intrare_ro else '')
         
         # Ajustăm lățimea coloanelor
         for col in ws.columns:
