@@ -805,6 +805,194 @@ class WorkerViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=False, methods=['get'], url_path='export_excel')
+    def export_excel(self, request):
+        """
+        Exportă lista de lucrători în Excel cu filtrele aplicate.
+        GET /api/workers/export_excel/?status=Activ&client_id=1
+        Accesibil doar pentru Management/Admin.
+        """
+        # Verifică permisiunile
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+        
+        if role not in [UserRole.MANAGEMENT, UserRole.ADMIN]:
+            return Response(
+                {'detail': 'Nu aveți permisiunea de a exporta date.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Obține queryset-ul filtrat
+        qs = self.get_queryset()
+        qs = self.filter_queryset(qs)
+        
+        # Creăm workbook-ul Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Raport Lucrători"
+        
+        # Header-uri
+        headers = [
+            'Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Status',
+            'Client', 'Cod COR', 'Data WP', 'Data Viză', 'Data CIM',
+            'CNP', 'Data Intrare RO', 'Telefon', 'Email'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = openpyxl.styles.Font(bold=True)
+            cell.fill = openpyxl.styles.PatternFill(
+                start_color="366092", end_color="366092", fill_type="solid"
+            )
+            cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
+        
+        # Date
+        for row_idx, worker in enumerate(qs, 2):
+            ws.cell(row=row_idx, column=1, value=row_idx - 1)
+            ws.cell(row=row_idx, column=2, value=worker.nume)
+            ws.cell(row=row_idx, column=3, value=worker.prenume)
+            ws.cell(row=row_idx, column=4, value=worker.cetatenie)
+            ws.cell(row=row_idx, column=5, value=worker.pasaport_nr)
+            ws.cell(row=row_idx, column=6, value=worker.status)
+            ws.cell(row=row_idx, column=7, value=worker.client.denumire if worker.client else '')
+            ws.cell(row=row_idx, column=8, value=worker.cod_cor_ref.cod if worker.cod_cor_ref else worker.cod_cor)
+            ws.cell(row=row_idx, column=9, value=str(worker.data_programare_wp) if worker.data_programare_wp else '')
+            ws.cell(row=row_idx, column=10, value=str(worker.data_programare_interviu) if worker.data_programare_interviu else '')
+            ws.cell(row=row_idx, column=11, value=str(worker.data_emitere_cim) if worker.data_emitere_cim else '')
+            ws.cell(row=row_idx, column=12, value=worker.cnp)
+            ws.cell(row=row_idx, column=13, value=str(worker.data_intrare_ro) if worker.data_intrare_ro else '')
+            ws.cell(row=row_idx, column=14, value=worker.telefon)
+            ws.cell(row=row_idx, column=15, value=worker.email)
+        
+        # Ajustăm lățimea coloanelor
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 30)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # Salvăm în memory buffer
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f'raport_lucratori_{request.user.username}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+
+    @action(detail=False, methods=['get'], url_path='export_pdf')
+    def export_pdf(self, request):
+        """
+        Exportă lista de lucrători în PDF cu filtrele aplicate.
+        GET /api/workers/export_pdf/?status=Activ&client_id=1
+        Accesibil doar pentru Management/Admin.
+        """
+        # Verifică permisiunile
+        try:
+            role = request.user.profile.role
+        except UserProfile.DoesNotExist:
+            role = None
+        
+        if role not in [UserRole.MANAGEMENT, UserRole.ADMIN]:
+            return Response(
+                {'detail': 'Nu aveți permisiunea de a exporta date.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Verifică dacă reportlab e instalat
+        try:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.lib.units import cm
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        except ImportError:
+            return Response(
+                {'detail': 'Biblioteca reportlab nu este instalată pe server.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Obține queryset-ul filtrat
+        qs = self.get_queryset()
+        qs = self.filter_queryset(qs)
+        
+        # Creăm PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            rightMargin=1*cm, leftMargin=1*cm,
+            topMargin=1*cm, bottomMargin=1*cm
+        )
+        
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        # Titlu
+        title = Paragraph("Raport Lucrători - ISS Platform", styles['Heading1'])
+        elements.append(title)
+        elements.append(Spacer(1, 20))
+        
+        # Tabel
+        headers = ['Nr.', 'Nume', 'Prenume', 'Cetățenie', 'Pașaport', 'Status', 'Client']
+        data = [headers]
+        
+        for idx, worker in enumerate(qs[:100], 1):  # Limită la 100 pentru PDF
+            data.append([
+                str(idx),
+                worker.nume or '',
+                worker.prenume or '',
+                worker.cetatenie or '',
+                worker.pasaport_nr or '',
+                worker.status or '',
+                worker.client.denumire if worker.client else ''
+            ])
+        
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e40af')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f8fafc')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#cbd5e1')),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f5f9')])
+        ]))
+        
+        elements.append(table)
+        
+        # Info
+        if qs.count() > 100:
+            elements.append(Spacer(1, 10))
+            info = Paragraph(
+                f"Se afișează primele 100 din {qs.count()} rezultate. Exportați în Excel pentru lista completă.",
+                styles['Normal']
+            )
+            elements.append(info)
+        
+        doc.build(elements)
+        buffer.seek(0)
+        
+        response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+        filename = f'raport_lucratori_{request.user.username}.pdf'
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+
 
 class WorkerDocumentViewSet(viewsets.ModelViewSet):
     """ViewSet pentru gestionarea documentelor lucrătorilor."""
